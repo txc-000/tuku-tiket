@@ -1,16 +1,16 @@
-# React + Vite
+# 🎟️ TukuTiket - Real-time Ticketing System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistem manajemen tiket acara yang mencakup alur pemilihan kursi interaktif, pembayaran, hingga validasi kehadiran.
 
-Currently, two official plugins are available:
+## 🚀 Fitur Unggulan
+* **Radial Seat Layout**: Pemilihan kursi dengan koordinat dinamis.
+* **Individual QR Ticket**: Setiap tiket memiliki QR unik berbasis ID kursi.
+* **Admin Gate Scanner**: Validasi tiket real-time menggunakan kamera perangkat.
+* **E-Ticket Export**: Mengunduh tiket dalam format PDF secara instan.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🛠️ Tech Stack
+* **Frontend**: React.js & Tailwind CSS.
+* **Backend**: Supabase (Database & Real-time).
+* **Tools**: jsPDF, html5-qrcode, qrcode.react.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
