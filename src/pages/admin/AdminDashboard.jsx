@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import SeatMonitor from './SeatMonitor'; // Pastikan file ini dibuat (kode ada di bawah)
+import ClockPositionPicker from '../../components/ClockPositionPicker';
 
 const formatIDR = (price) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price || 0);
 
@@ -34,6 +35,7 @@ export default function AdminDashboard() {
   const [eventForm, setEventForm] = useState({ title: '', date: '', venue: '', price: '', category: 'Konser', status: 'draft', image: '' });
   const [secForm, setSecForm] = useState({
     name: '', floor_name: '', price: '', row_count: 8, col_count: 12, color: '#2563eb',
+    clock_position: 12, ring: 'inner',
   });
 
   useEffect(() => {
@@ -109,7 +111,7 @@ export default function AdminDashboard() {
       });
 
       fetchSections(selectedEventId);
-      setSecForm({ name: '', floor_name: '', price: '', row_count: 8, col_count: 12, color: '#2563eb' });
+      setSecForm({ name: '', floor_name: '', price: '', row_count: 8, col_count: 12, color: '#2563eb', clock_position: 12, ring: 'inner' });
     } catch (err) {
       alert("Gagal membuat section: " + (err.response?.data?.message || err.message));
     } finally {
@@ -265,6 +267,15 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-3 pt-1">
                     <input type="color" className="h-10 w-14 rounded-lg cursor-pointer bg-transparent border border-white/10 shrink-0" value={secForm.color} onChange={e => setSecForm({...secForm, color: e.target.value})} />
                     <p className="text-[8px] font-black uppercase text-slate-500">Warna Penanda Section</p>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/5">
+                    <p className="text-[8px] font-black uppercase mb-3 mt-3 text-slate-500 flex items-center gap-2"><MapPin size={10}/> Posisi di Denah</p>
+                    <ClockPositionPicker
+                      clockPosition={secForm.clock_position}
+                      ring={secForm.ring}
+                      onChange={(patch) => setSecForm(prev => ({ ...prev, ...patch }))}
+                    />
                   </div>
 
                   <button

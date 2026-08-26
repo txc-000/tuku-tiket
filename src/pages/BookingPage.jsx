@@ -6,6 +6,7 @@ import { fetchCurrentUser } from "../lib/auth";
 import { guardDemo } from "../lib/demoMode";
 import { getSeatGridCoords, SEAT_SIZE, SEAT_GAP } from "../lib/seatLayout";
 import Navbar from "../components/Navbar";
+import VenueMap from "../components/VenueMap";
 import PaymentModal from "../components/PaymentModal";
 import { Loader2, ArrowLeft, X } from "lucide-react";
 
@@ -154,46 +155,24 @@ export default function BookingPage() {
             </div>
           ) : (
             <>
-              {/* Pilihan Section — kaya pilih studio bioskop */}
-              <div className="flex gap-3 overflow-x-auto pb-3 mb-10 -mx-1 px-1">
-                {sections.map(sec => {
-                  const total = sec.seats.length;
-                  const available = sec.seats.filter(s => s.status === 'available').length;
-                  const isActive = sec.id === activeSectionId;
-                  return (
-                    <button
-                      key={sec.id}
-                      onClick={() => setActiveSectionId(sec.id)}
-                      className={`text-left shrink-0 min-w-[168px] px-5 py-4 rounded-2xl border transition-all ${
-                        isActive ? 'bg-white/10 border-white/40' : 'bg-white/5 border-white/5 hover:bg-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: sec.color || '#475569' }} />
-                        <span className="font-black text-xs uppercase tracking-wide truncate">{sec.name}</span>
-                      </div>
-                      {sec.floor_name && <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">{sec.floor_name}</p>}
-                      <p className="text-blue-400 font-bold text-sm mb-0.5">Rp {Number(sec.price).toLocaleString('id-ID')}</p>
-                      <p className="text-[10px] text-slate-500 font-bold">{available}/{total} tersedia</p>
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Denah venue — klik area yang mau diduduki */}
+              <p className="text-center text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-4">Pilih Area Duduk</p>
+              <VenueMap sections={sections} activeSectionId={activeSectionId} onSelect={setActiveSectionId} />
 
               {activeSection && (
                 <div>
-                  {/* Legenda */}
-                  <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-8 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-600" /> Tersedia</span>
-                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-white" /> Dipilih</span>
-                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-rose-500" /> Ditahan</span>
-                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-900" /> Terjual</span>
-                  </div>
-
-                  {/* Panggung / Layar */}
-                  <div className="max-w-md mx-auto mb-10">
-                    <div className="h-1.5 rounded-full bg-gradient-to-r from-transparent via-blue-500 to-transparent mb-2 shadow-[0_0_20px_2px_rgba(59,130,246,0.5)]" />
-                    <p className="text-center text-[10px] font-black uppercase tracking-[0.5em] text-slate-500">Panggung / Layar</p>
+                  {/* Section aktif + Legenda */}
+                  <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mb-8">
+                    <span className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: activeSection.color || '#475569' }} />
+                      <span className="text-xs font-black uppercase tracking-wide">{activeSection.name}</span>
+                    </span>
+                    <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                      <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-600" /> Tersedia</span>
+                      <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-white" /> Dipilih</span>
+                      <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-rose-500" /> Ditahan</span>
+                      <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-900" /> Terjual</span>
+                    </div>
                   </div>
 
                   {/* Deretan kursi */}

@@ -25,10 +25,10 @@ class EventSeeder extends Seeder
             image: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=1000',
             themeColor: '#22d3ee',
             sections: [
-                ['name' => 'VIP East', 'floor_name' => 'Lower Bowl', 'price' => 1500000, 'row_count' => 4, 'col_count' => 12, 'color' => '#2563eb'],
-                ['name' => 'VIP West', 'floor_name' => 'Lower Bowl', 'price' => 1500000, 'row_count' => 4, 'col_count' => 12, 'color' => '#4f46e5'],
-                ['name' => 'North Stand', 'floor_name' => 'Upper Bowl', 'price' => 750000, 'row_count' => 6, 'col_count' => 18, 'color' => '#ea580c'],
-                ['name' => 'South Stand', 'floor_name' => 'Upper Bowl', 'price' => 750000, 'row_count' => 6, 'col_count' => 18, 'color' => '#d97706'],
+                ['name' => 'VIP East', 'floor_name' => 'Lower Bowl', 'price' => 1500000, 'row_count' => 4, 'col_count' => 12, 'color' => '#2563eb', 'clock_position' => 3, 'ring' => 'inner'],
+                ['name' => 'VIP West', 'floor_name' => 'Lower Bowl', 'price' => 1500000, 'row_count' => 4, 'col_count' => 12, 'color' => '#4f46e5', 'clock_position' => 9, 'ring' => 'inner'],
+                ['name' => 'North Stand', 'floor_name' => 'Upper Bowl', 'price' => 750000, 'row_count' => 6, 'col_count' => 18, 'color' => '#ea580c', 'clock_position' => 12, 'ring' => 'outer'],
+                ['name' => 'South Stand', 'floor_name' => 'Upper Bowl', 'price' => 750000, 'row_count' => 6, 'col_count' => 18, 'color' => '#d97706', 'clock_position' => 6, 'ring' => 'outer'],
             ],
         );
 
@@ -42,9 +42,9 @@ class EventSeeder extends Seeder
             image: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=1000',
             themeColor: '#ef4444',
             sections: [
-                ['name' => 'VIP Barat', 'floor_name' => 'Lower Bowl', 'price' => 500000, 'row_count' => 4, 'col_count' => 10, 'color' => '#dc2626'],
-                ['name' => 'Tribun Utara', 'floor_name' => 'Upper Bowl', 'price' => 150000, 'row_count' => 8, 'col_count' => 20, 'color' => '#f97316'],
-                ['name' => 'Tribun Selatan', 'floor_name' => 'Upper Bowl', 'price' => 150000, 'row_count' => 8, 'col_count' => 20, 'color' => '#eab308'],
+                ['name' => 'VIP Barat', 'floor_name' => 'Lower Bowl', 'price' => 500000, 'row_count' => 4, 'col_count' => 10, 'color' => '#dc2626', 'clock_position' => 9, 'ring' => 'inner'],
+                ['name' => 'Tribun Utara', 'floor_name' => 'Upper Bowl', 'price' => 150000, 'row_count' => 8, 'col_count' => 20, 'color' => '#f97316', 'clock_position' => 12, 'ring' => 'outer'],
+                ['name' => 'Tribun Selatan', 'floor_name' => 'Upper Bowl', 'price' => 150000, 'row_count' => 8, 'col_count' => 20, 'color' => '#eab308', 'clock_position' => 6, 'ring' => 'outer'],
             ],
         );
 
@@ -58,8 +58,8 @@ class EventSeeder extends Seeder
             image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=1000',
             themeColor: '#8b5cf6',
             sections: [
-                ['name' => 'Main Hall', 'floor_name' => 'Ground Floor', 'price' => 350000, 'row_count' => 10, 'col_count' => 14, 'color' => '#7c3aed'],
-                ['name' => 'Balcony', 'floor_name' => '2nd Floor', 'price' => 550000, 'row_count' => 3, 'col_count' => 14, 'color' => '#a855f7'],
+                ['name' => 'Main Hall', 'floor_name' => 'Ground Floor', 'price' => 350000, 'row_count' => 10, 'col_count' => 14, 'color' => '#7c3aed', 'clock_position' => 6, 'ring' => 'inner'],
+                ['name' => 'Balcony', 'floor_name' => '2nd Floor', 'price' => 550000, 'row_count' => 3, 'col_count' => 14, 'color' => '#a855f7', 'clock_position' => 6, 'ring' => 'outer'],
             ],
         );
 

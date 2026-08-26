@@ -17,14 +17,22 @@ return new class extends Migration
             $table->unsignedInteger('row_count');
             $table->unsignedInteger('col_count');
 
-            // Seat map is a straight cinema-style grid, selected one section at a
-            // time (like XXI) — no per-section angle/radius positioning needed.
-            // An earlier version tried to place every section on one shared
-            // curved stadium bowl (angle_start/angle_end/radius_inner/radius_outer),
-            // but that math made rows overlap or fan out unevenly whenever a
-            // section didn't fit the assumptions (too many rows for its radius
-            // range, etc.) — a straight grid can't have that problem structurally.
+            // Seat map itself is a straight cinema-style grid, selected one section
+            // at a time (like XXI) — no per-seat angle/radius positioning. An
+            // earlier version tried to place every seat on one shared curved
+            // stadium bowl, but that math made rows overlap or fan out unevenly
+            // whenever a section didn't fit its assumptions — a straight grid
+            // can't have that problem structurally.
             $table->string('color')->default('#2563eb'); // hex, applied via inline style (not a Tailwind class)
+
+            // Where this section's zone sits on the venue overview map (the
+            // picker shown before the seat grid) — a clock position (1-12,
+            // like "10 o'clock from the pitch") plus near/far ring. This is
+            // deliberately coarse (click a spot, not type numbers) and only
+            // affects the overview zone layout, never individual seats, so it
+            // can't reintroduce the old overlap bug.
+            $table->unsignedTinyInteger('clock_position')->default(12); // 1-12
+            $table->string('ring')->default('inner'); // inner | outer
 
             $table->text('view_image')->nullable();
             $table->timestamps();

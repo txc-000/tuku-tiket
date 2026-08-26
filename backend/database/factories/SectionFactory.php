@@ -26,6 +26,8 @@ class SectionFactory extends Factory
             'row_count' => 5,
             'col_count' => 10,
             'color' => fake()->randomElement(['#2563eb', '#4f46e5', '#ea580c', '#d97706']),
+            'clock_position' => fake()->numberBetween(1, 12),
+            'ring' => fake()->randomElement(['inner', 'outer']),
         ];
     }
 }

@@ -32,3 +32,26 @@ export function getSeatPixelPosition(section, index) {
     y: row * spacing,
   };
 }
+
+// --- Venue overview map (the zone picker shown before the seat grid) ---
+// Each section is one block placed around a central pitch/stage by a clock
+// position (1-12, like a clock face) and a near/far ring — coarse, one-click
+// admin input, and completely separate from the seat grid above, so it can
+// never reintroduce per-seat overlap bugs.
+export const MAP_RING_RADIUS = { inner: 190, outer: 320 };
+
+/**
+ * @returns {{ x: number, y: number, angleDeg: number }}
+ */
+export function getSectionMapPosition(section) {
+  const clockPosition = section.clock_position || 12;
+  const radius = MAP_RING_RADIUS[section.ring] ?? MAP_RING_RADIUS.inner;
+  const angleDeg = clockPosition * 30 - 90; // 12 o'clock -> straight up
+
+  const rad = (angleDeg * Math.PI) / 180;
+  return {
+    x: Math.cos(rad) * radius,
+    y: Math.sin(rad) * radius,
+    angleDeg,
+  };
+}

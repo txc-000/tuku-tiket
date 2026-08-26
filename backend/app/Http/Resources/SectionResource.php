@@ -23,6 +23,8 @@ class SectionResource extends JsonResource
             'row_count' => $this->row_count,
             'col_count' => $this->col_count,
             'color' => $this->color,
+            'clock_position' => $this->clock_position,
+            'ring' => $this->ring,
             'view_image' => $this->view_image,
             'seats' => SeatResource::collection($this->whenLoaded('seats')),
         ];

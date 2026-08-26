@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['event_id', 'name', 'floor_name', 'price', 'row_count', 'col_count', 'color', 'view_image'])]
+#[Fillable(['event_id', 'name', 'floor_name', 'price', 'row_count', 'col_count', 'color', 'clock_position', 'ring', 'view_image'])]
 class Section extends Model
 {
     /** @use HasFactory<SectionFactory> */
