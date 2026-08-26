@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import api from '../../lib/api';
 import echo from '../../lib/echo';
+import { getSeatPosition, getSectionSeatSize } from '../../lib/seatLayout';
 import {
-  X, CheckCircle, XCircle, Loader2, DollarSign, User, Mail, 
-  Lock, Trash2, ZoomIn, ZoomOut, RefreshCcw, Hand 
+  X, Loader2, User, Mail,
+  Lock, Trash2, ZoomIn, ZoomOut, RefreshCcw
 } from 'lucide-react';
 
 const formatIDR = (price) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price || 0);
@@ -12,19 +13,17 @@ export default function SeatMonitor({ section }) {
   const [seats, setSeats] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState(null);
-  
+  const [zoomPercent, setZoomPercent] = useState(100);
+
   // STATE VISUAL
   // Kita pisahkan state React (untuk UI tombol) dan ref (untuk animasi licin)
-  const transform = useRef({ x: 0, y: 0, k: 1 }); 
-  const containerRef = useRef(null); 
-  const contentRef = useRef(null); // Ref ke grup <g> SVG
-  
+  const transform = useRef({ x: 0, y: 0, k: 1 });
+  const containerRef = useRef(null);
+  const contentRef = useRef(null); // Ref ke div pembungkus kursi
+
   const isDragging = useRef(false);
   const startPan = useRef({ x: 0, y: 0 });
   const startTransform = useRef({ x: 0, y: 0 }); // Posisi awal saat mulai drag
-
-  // FORCE UPDATE: Untuk trigger render ulang jika perlu (jarang dipakai di mode licin)
-  const [, forceUpdate] = useState({});
 
   // --- FUNGSI UPDATE VISUAL LANGSUNG (TANPA RE-RENDER REACT) ---
   const updateTransform = () => {
@@ -63,7 +62,7 @@ export default function SeatMonitor({ section }) {
     isDragging.current = true;
     startPan.current = { x: e.clientX, y: e.clientY };
     startTransform.current = { ...transform.current }; // Simpan posisi awal
-    
+
     // Ubah cursor jadi grabbing
     if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
   };
@@ -78,9 +77,9 @@ export default function SeatMonitor({ section }) {
     // Update ref langsung (sangat cepat)
     transform.current.x = startTransform.current.x + dx;
     transform.current.y = startTransform.current.y + dy;
-    
+
     // Panggil update visual
-    requestAnimationFrame(updateTransform); 
+    requestAnimationFrame(updateTransform);
   };
 
   const handleMouseUp = () => {
@@ -92,13 +91,13 @@ export default function SeatMonitor({ section }) {
     const newScale = Math.max(0.2, Math.min(transform.current.k + delta, 5));
     transform.current.k = newScale;
     updateTransform();
-    forceUpdate({}); // Update UI angka persentase zoom
+    setZoomPercent(Math.round(newScale * 100));
   };
 
   const handleSeatClick = (seat, e) => {
     e.stopPropagation();
     // Deteksi jika user sebenarnya sedang drag (bukan klik murni)
-    if (isDragging.current) return; 
+    if (isDragging.current) return;
     setSelectedSeat(seat);
   };
 
@@ -120,32 +119,19 @@ export default function SeatMonitor({ section }) {
     }
   };
 
-  // --- RUMUS POSISI ---
-  const getPos = (rowIdx, colIdx) => {
-    const colCount = section.col_count || 1;
-    if (section.layout_type === 'orchestra') {
-      const r = 300 + (rowIdx * 80);
-      const totalAngle = 140; 
-      const startAngle = (180 - totalAngle) / 2; 
-      const angleStep = totalAngle / (colCount - 1 || 1);
-      const angleInRad = (startAngle + (colIdx * angleStep)) * (Math.PI / 180);
-      return { x: Math.cos(angleInRad) * r, y: Math.sin(angleInRad) * r };
-    } else {
-      const r = 500 + (rowIdx * 60);
-      const angleInRad = ((section.map_angle || 0) + (colIdx * 5)) * (Math.PI / 180);
-      return { x: Math.cos(angleInRad) * r, y: Math.sin(angleInRad) * r };
-    }
-  };
-
   if (!section) return null;
 
   const sold = seats.filter(s => s.status === 'sold').length;
   const blocked = seats.filter(s => s.status === 'blocked').length;
   const currentRevenue = sold * (section.price || 0);
+  // Ini fungsi yang SAMA PERSIS dipakai BookingPage.jsx (src/lib/seatLayout.js) —
+  // apa yang admin lihat di sini sekarang dijamin sama dengan yang pelanggan
+  // lihat, tidak ada lagi dua rumus posisi yang bisa beda hasil.
+  const seatSize = getSectionSeatSize(section);
 
   return (
     <div className="space-y-8 pb-10 relative h-full">
-      
+
       {/* POPUP DETAIL (MODAL) */}
       {selectedSeat && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedSeat(null)}>
@@ -161,7 +147,7 @@ export default function SeatMonitor({ section }) {
                 {selectedSeat.status === 'sold' ? 'TERJUAL' : selectedSeat.status === 'blocked' ? 'DIBLOKIR' : 'TERSEDIA'}
               </h3>
             </div>
-            
+
             {selectedSeat.status === 'sold' ? (
               <div className="space-y-4 bg-white/5 p-6 rounded-2xl">
                  <div className="flex gap-4 items-center"><User className="text-blue-500"/><p>{selectedSeat.guest_name || 'Tamu'}</p></div>
@@ -201,7 +187,7 @@ export default function SeatMonitor({ section }) {
       </div>
 
       {/* MONITOR VISUAL (CANVAS) */}
-      <div 
+      <div
         ref={containerRef}
         className="bg-slate-950 border border-white/10 rounded-[40px] h-[650px] relative overflow-hidden cursor-grab active:cursor-grabbing select-none group"
         onMouseDown={handleMouseDown}
@@ -210,41 +196,43 @@ export default function SeatMonitor({ section }) {
         onMouseLeave={handleMouseUp}
         onWheel={(e) => { e.preventDefault(); handleZoom(e.deltaY > 0 ? -0.1 : 0.1); }}
       >
-        
+
         {/* PANEL ZOOM (POJOK KANAN) */}
         <div className="absolute top-6 right-6 flex flex-col gap-2 z-10" onMouseDown={e => e.stopPropagation()}>
           <button onClick={() => handleZoom(0.2)} className="bg-slate-800 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg border border-white/10 active:scale-95 transition-all"><ZoomIn size={20}/></button>
           <button onClick={() => handleZoom(-0.2)} className="bg-slate-800 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg border border-white/10 active:scale-95 transition-all"><ZoomOut size={20}/></button>
-          <button onClick={() => { transform.current={x:0,y:0,k:1}; updateTransform(); }} className="bg-slate-800 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg border border-white/10 active:scale-95 transition-all"><RefreshCcw size={20}/></button>
-          <div className="bg-black/50 text-white text-[10px] font-bold py-1 rounded-lg text-center backdrop-blur-sm">{(transform.current.k * 100).toFixed(0)}%</div>
+          <button onClick={() => { transform.current={x:0,y:0,k:1}; updateTransform(); setZoomPercent(100); }} className="bg-slate-800 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg border border-white/10 active:scale-95 transition-all"><RefreshCcw size={20}/></button>
+          <div className="bg-black/50 text-white text-[10px] font-bold py-1 rounded-lg text-center backdrop-blur-sm">{zoomPercent}%</div>
         </div>
 
         {loading ? (
            <div className="w-full h-full flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={48}/></div>
         ) : (
-          <svg width="100%" height="100%" viewBox="-2000 -2000 4000 4000" className="overflow-visible">
-            {/* GRUP UTAMA (YANG DIGERAKKAN) */}
-            <g ref={contentRef} style={{ transformOrigin: '0 0', transition: 'transform 0.05s linear' }}>
-               {seats.map((seat, idx) => {
-                 const rowIdx = Math.floor(idx / (section.col_count || 1));
-                 const colIdx = idx % (section.col_count || 1);
-                 const pos = getPos(rowIdx, colIdx);
-                 
-                 let colorClass = 'fill-green-500';
-                 if (seat.status === 'sold') colorClass = 'fill-red-600';
-                 if (seat.status === 'blocked') colorClass = 'fill-slate-600';
+          <div ref={contentRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }}>
+            {seats.map((seat, idx) => {
+              const { x, y, rotation } = getSeatPosition(section, idx);
 
-                 return (
-                   <g key={seat.id} onClick={(e) => handleSeatClick(seat, e)} className="cursor-pointer hover:opacity-80">
-                     <rect x={pos.x - 17} y={pos.y - 17} width={34} height={34} rx={8} className={`${colorClass} transition-colors duration-300`} />
-                     <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="middle" className="text-[9px] font-black fill-white pointer-events-none select-none">
-                       {seat.row_label}{seat.seat_number}
-                     </text>
-                   </g>
-                 )
-               })}
-            </g>
-          </svg>
+              let colorClass = 'bg-green-500 border-green-700';
+              if (seat.status === 'sold') colorClass = 'bg-red-600 border-red-800';
+              if (seat.status === 'blocked') colorClass = 'bg-slate-600 border-slate-800';
+
+              return (
+                <div
+                  key={seat.id}
+                  onClick={(e) => handleSeatClick(seat, e)}
+                  title={`${seat.row_label}${seat.seat_number}`}
+                  className={`absolute rounded-t-sm border-b-2 flex items-center justify-center font-black text-white cursor-pointer hover:brightness-125 transition-all ${colorClass}`}
+                  style={{
+                    left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`,
+                    width: seatSize, height: seatSize, fontSize: Math.max(6, seatSize * 0.26),
+                    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                  }}
+                >
+                  <span style={{ transform: `rotate(${-rotation}deg)` }}>{seat.row_label}{seat.seat_number}</span>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
