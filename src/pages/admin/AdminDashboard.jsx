@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import SeatMonitor from './SeatMonitor'; // Pastikan file ini dibuat (kode ada di bawah)
+import SectionLayoutPicker from '../../components/SectionLayoutPicker';
 
 const formatIDR = (price) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price || 0);
 
@@ -271,31 +272,10 @@ export default function AdminDashboard() {
                   {/* Posisi di peta stadion — ini yang bikin section baru tidak
                       numpuk di posisi yang sama seperti dulu. Sudut & radius
                       dipakai bareng oleh halaman booking pelanggan & monitor ini. */}
-                  <div className="pt-2 border-t border-white/5">
-                    <p className="text-[8px] font-black uppercase mb-3 mt-3 text-slate-500 flex items-center gap-2"><MapPin size={10}/> Posisi di Peta</p>
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div>
-                         <p className="text-[8px] font-black uppercase mb-1 text-slate-500">Sudut Mulai (°)</p>
-                         <input type="number" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs text-white text-center" value={secForm.angle_start} onChange={e => setSecForm({...secForm, angle_start: parseInt(e.target.value)})} />
-                      </div>
-                      <div>
-                         <p className="text-[8px] font-black uppercase mb-1 text-slate-500">Sudut Akhir (°)</p>
-                         <input type="number" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs text-white text-center" value={secForm.angle_end} onChange={e => setSecForm({...secForm, angle_end: parseInt(e.target.value)})} />
-                      </div>
-                      <div>
-                         <p className="text-[8px] font-black uppercase mb-1 text-slate-500">Radius Dalam</p>
-                         <input type="number" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs text-white text-center" value={secForm.radius_inner} onChange={e => setSecForm({...secForm, radius_inner: parseInt(e.target.value)})} />
-                      </div>
-                      <div>
-                         <p className="text-[8px] font-black uppercase mb-1 text-slate-500">Radius Luar</p>
-                         <input type="number" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs text-white text-center" value={secForm.radius_outer} onChange={e => setSecForm({...secForm, radius_outer: parseInt(e.target.value)})} />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <input type="color" className="h-10 w-14 rounded-lg cursor-pointer bg-transparent border border-white/10" value={secForm.color} onChange={e => setSecForm({...secForm, color: e.target.value})} />
-                      <p className="text-[8px] font-black uppercase text-slate-500">Warna Section</p>
-                    </div>
-                  </div>
+                  <SectionLayoutPicker
+                    value={secForm}
+                    onChange={(patch) => setSecForm(prev => ({ ...prev, ...patch }))}
+                  />
 
                   <button
                     type="submit" 
