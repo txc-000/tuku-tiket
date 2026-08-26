@@ -135,7 +135,8 @@ export default function MyTickets() {
             {myTickets.map((ticket) => {
               // Menentukan warna tema (Default Cyan jika null)
               const accentColor = ticket.transactions.events?.theme_color || '#22d3ee';
-              
+              const isPaid = ticket.transactions.payment_status === 'paid';
+
               return (
                 <div key={ticket.id} id={`ticket-card-${ticket.id}`} className="group relative w-full flex flex-col md:flex-row rounded-3xl overflow-hidden bg-zinc-900 shadow-2xl transition-all duration-300 hover:shadow-cyan-900/20">
                   
@@ -157,10 +158,16 @@ export default function MyTickets() {
 
                      {/* Top Content */}
                      <div className="relative z-10 flex justify-between items-start">
-                        <span className="backdrop-blur-md border border-white/10 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg"
-                              style={{ color: accentColor, backgroundColor: `${accentColor}15` }}>
-                          Confirmed
-                        </span>
+                        {isPaid ? (
+                          <span className="backdrop-blur-md border border-white/10 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg"
+                                style={{ color: accentColor, backgroundColor: `${accentColor}15` }}>
+                            Lunas
+                          </span>
+                        ) : (
+                          <span className="backdrop-blur-md border border-amber-500/20 bg-amber-500/10 text-amber-400 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg">
+                            Menunggu Pembayaran
+                          </span>
+                        )}
                         
                         {/* Tombol Download PDF */}
                         <button onClick={() => downloadPDF(ticket.id)} 

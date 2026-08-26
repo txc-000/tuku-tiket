@@ -8,7 +8,13 @@ import { getSeatGridCoords, SEAT_SIZE, SEAT_GAP } from "../lib/seatLayout";
 import Navbar from "../components/Navbar";
 import VenueMap from "../components/VenueMap";
 import PaymentModal from "../components/PaymentModal";
-import { Loader2, ArrowLeft, X } from "lucide-react";
+import BookingSteps from "../components/BookingSteps";
+import { Loader2, ArrowLeft, X, Calendar, MapPin } from "lucide-react";
+
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+};
 
 export default function BookingPage() {
   const { eventId } = useParams();
@@ -139,14 +145,24 @@ export default function BookingPage() {
 
       <div className="flex-1 pt-28 pb-16 px-6">
         <div className="max-w-5xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-10">
+          {/* Header event — kartu ringkasan seperti web booking pada umumnya */}
+          <div className="flex items-start gap-4 mb-8">
             <button onClick={() => navigate('/')} className="p-3 bg-white/5 rounded-2xl transition-all active:scale-90 shrink-0"><ArrowLeft size={22}/></button>
-            <div>
-              <h1 className="font-black text-2xl md:text-3xl tracking-tighter uppercase italic">{event?.title}</h1>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{event?.venue}</p>
+            <div className="flex-1 flex flex-col sm:flex-row gap-5 bg-white/5 border border-white/5 rounded-3xl p-5 overflow-hidden">
+              {event?.image && (
+                <img src={event.image} alt={event.title} className="w-full sm:w-40 h-28 object-cover rounded-2xl shrink-0" />
+              )}
+              <div className="min-w-0">
+                <h1 className="font-black text-xl md:text-2xl tracking-tighter uppercase italic mb-2 truncate">{event?.title}</h1>
+                <div className="flex flex-col gap-1.5">
+                  <span className="flex items-center gap-2 text-xs text-slate-400 font-medium"><MapPin size={14} className="text-blue-400 shrink-0" /> {event?.venue}</span>
+                  {event?.date && <span className="flex items-center gap-2 text-xs text-slate-400 font-medium"><Calendar size={14} className="text-blue-400 shrink-0" /> {formatDate(event.date)}</span>}
+                </div>
+              </div>
             </div>
           </div>
+
+          <BookingSteps current={showPayment ? 2 : 1} />
 
           {totalSeatCount === 0 ? (
             <div className="text-center py-32">
@@ -156,23 +172,31 @@ export default function BookingPage() {
           ) : (
             <>
               {/* Denah venue — klik area yang mau diduduki */}
-              <p className="text-center text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-4">Pilih Area Duduk</p>
-              <VenueMap sections={sections} activeSectionId={activeSectionId} onSelect={setActiveSectionId} />
+              <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 md:p-8 mb-6">
+                <p className="text-center text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-4">Pilih Area Duduk</p>
+                <VenueMap sections={sections} activeSectionId={activeSectionId} onSelect={setActiveSectionId} />
+              </div>
 
               {activeSection && (
-                <div>
-                  {/* Section aktif + Legenda */}
-                  <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mb-8">
-                    <span className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: activeSection.color || '#475569' }} />
-                      <span className="text-xs font-black uppercase tracking-wide">{activeSection.name}</span>
+                <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 md:p-8">
+                  {/* Section aktif */}
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-6 border-b border-white/5">
+                    <span className="flex items-center gap-2.5">
+                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: activeSection.color || '#475569' }} />
+                      <span>
+                        <span className="block text-sm font-black uppercase tracking-wide">{activeSection.name}</span>
+                        {activeSection.floor_name && <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-widest">{activeSection.floor_name}</span>}
+                      </span>
                     </span>
-                    <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                      <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-600" /> Tersedia</span>
-                      <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-white" /> Dipilih</span>
-                      <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-rose-500" /> Ditahan</span>
-                      <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-900" /> Terjual</span>
-                    </div>
+                    <span className="text-blue-400 font-black text-lg">Rp {Number(activeSection.price).toLocaleString('id-ID')} <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">/ kursi</span></span>
+                  </div>
+
+                  {/* Legenda */}
+                  <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 mb-8 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-600" /> Tersedia</span>
+                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-white" /> Dipilih</span>
+                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-rose-500" /> Ditahan</span>
+                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-900" /> Terjual</span>
                   </div>
 
                   {/* Deretan kursi */}
@@ -259,6 +283,7 @@ export default function BookingPage() {
         <PaymentModal
           total={cart.reduce((a,b)=>a+(Number(b.price)||0),0)}
           cart={cart}
+          eventTitle={event?.title}
           isGuest={!profile}
           onClose={() => setShowPayment(false)}
           onConfirm={confirmBooking}

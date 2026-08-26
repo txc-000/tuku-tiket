@@ -1,7 +1,7 @@
-import { X, ShieldCheck, Info, Loader2, User, Mail } from 'lucide-react';
+import { X, ShieldCheck, Info, Loader2, User, Mail, Ticket } from 'lucide-react';
 import { useState } from 'react';
 
-export default function PaymentModal({ total, isGuest, onClose, onConfirm }) {
+export default function PaymentModal({ total, cart, eventTitle, isGuest, onClose, onConfirm }) {
   const [verifying, setVerifying] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
@@ -23,11 +23,31 @@ export default function PaymentModal({ total, isGuest, onClose, onConfirm }) {
           <div className="flex items-center gap-2">
             <ShieldCheck className="text-blue-500" />
             <span className="text-xs font-black uppercase tracking-widest text-slate-400">Secure Payment</span>
+            <span className="text-[9px] font-bold text-slate-600 bg-white/5 px-2 py-0.5 rounded-full ml-1">Langkah 2/3</span>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full"><X size={20}/></button>
         </div>
 
         <div className="p-8 pt-6 text-center">
+          {eventTitle && <p className="text-slate-300 text-sm font-bold mb-6 truncate">{eventTitle}</p>}
+
+          {/* RINGKASAN PESANAN */}
+          {cart?.length > 0 && (
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-4 mb-6 text-left">
+              <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase mb-3">
+                <Ticket size={14}/> {cart.length} Kursi
+              </div>
+              <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
+                {cart.map(seat => (
+                  <div key={seat.id} className="flex justify-between items-center text-xs">
+                    <span className="text-slate-300 font-bold">Kursi {seat.row_label}{seat.seat_number}</span>
+                    <span className="text-slate-400 font-mono">Rp {Number(seat.price || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">Total Tagihan</p>
           <h2 className="text-4xl font-black text-white mb-8">Rp {total.toLocaleString('id-ID')}</h2>
 
