@@ -34,32 +34,86 @@ export function getSeatPixelPosition(section, index) {
 }
 
 // --- Venue overview map (the zone picker shown before the seat grid) ---
-// Each section is one block placed around a central pitch/stage by a clock
-// position (1-12, like a clock face) and a near/far ring — coarse, one-click
-// admin input, and completely separate from the seat grid above, so it can
-// never reintroduce per-seat overlap bugs.
-//
-// Positions are expressed as RATIOS (fraction of the map container's own
-// half-width/half-height), not fixed pixels. A fixed-px version clipped
-// zones clean off the screen on narrow viewports — the container's own
-// left/top edge doesn't scroll into view when content overflows a
-// `overflow-x-hidden` page. Ratios scale with whatever size the container
-// actually renders at, so a zone is structurally guaranteed to stay inside
-// its container on any screen width.
-export const MAP_RING_RATIO = { inner: 0.46, outer: 0.72 };
+// Sections render as a continuous colored ring around a central pitch/stage
+// — like an actual seating-bowl schematic — instead of separate floating
+// blocks with gaps between them. Two earlier approaches (angle+radius per
+// seat, then isolated wedge blocks per section) both eventually broke down:
+// the first overlapped seats, the second left dead space between blocks and
+// clipped off narrow screens. A donut chart is a well-understood, always-
+// gap-free layout: every section gets a slice of the full circle sized by
+// how many seats it has, so the ring is always complete and reads as one
+// cohesive shape. Pure SVG with a viewBox, so it scales with its container
+// natively — no pixel math to keep in sync with screen width at all.
+export const RING_RADIUS = {
+  inner: { from: 95, to: 158 },
+  outer: { from: 176, to: 230 },
+};
+const RING_GAP_DEG = 2.5;
+const MIN_SEGMENT_DEG = 14;
 
 /**
- * @returns {{ xRatio: number, yRatio: number, angleDeg: number }}
+ * Lays out every section in one ring (inner or outer) as consecutive donut
+ * slices — ordered by clock_position (still a simple "roughly which side"
+ * hint from admin), sized proportionally to seat count, always filling the
+ * full circle with no gaps or overlaps regardless of how many sections or
+ * how lopsided their seat counts are.
+ *
+ * @param {Array} sections
+ * @param {'inner'|'outer'} ring
+ * `angleOffset` staggers where the ring starts (beyond the default 12
+ * o'clock) — without it, an inner and outer ring with the same section
+ * count split the circle identically and their labels end up stacked on
+ * the exact same ray regardless of how far apart the two radii are. A
+ * small stagger between rings is what actually fixes that, not more
+ * radial distance.
+ *
+ * @returns {Array<{ section: object, startDeg: number, endDeg: number, midDeg: number }>}
  */
-export function getSectionMapPosition(section) {
-  const clockPosition = section.clock_position || 12;
-  const radiusRatio = MAP_RING_RATIO[section.ring] ?? MAP_RING_RATIO.inner;
-  const angleDeg = clockPosition * 30 - 90; // 12 o'clock -> straight up
+export function layoutRingSegments(sections, ring, angleOffset = 0) {
+  const ringSections = sections
+    .filter(s => (s.ring || 'inner') === ring)
+    .slice()
+    .sort((a, b) => (a.clock_position || 12) - (b.clock_position || 12));
 
-  const rad = (angleDeg * Math.PI) / 180;
-  return {
-    xRatio: Math.cos(rad) * radiusRatio,
-    yRatio: Math.sin(rad) * radiusRatio,
-    angleDeg,
-  };
+  if (ringSections.length === 0) return [];
+
+  const totalSeats = ringSections.reduce((sum, s) => sum + (s.seats?.length || s.row_count * s.col_count || 1), 0) || 1;
+  const totalGap = RING_GAP_DEG * ringSections.length;
+  const availableDeg = Math.max(0, 360 - totalGap);
+
+  let cursor = -90 + angleOffset; // mulai dari jam 12, digeser dikit
+  return ringSections.map(sec => {
+    const seatCount = sec.seats?.length || sec.row_count * sec.col_count || 1;
+    const rawSpan = (seatCount / totalSeats) * availableDeg;
+    const spanDeg = Math.max(MIN_SEGMENT_DEG, rawSpan);
+    const startDeg = cursor;
+    const endDeg = startDeg + spanDeg;
+    cursor = endDeg + RING_GAP_DEG;
+    return { section: sec, startDeg, endDeg, midDeg: (startDeg + endDeg) / 2 };
+  });
 }
+
+function polarToCartesian(cx, cy, r, angleDeg) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+/**
+ * SVG path `d` for one donut slice (a ring segment between two radii).
+ */
+export function donutSegmentPath(cx, cy, rInner, rOuter, startDeg, endDeg) {
+  const largeArc = endDeg - startDeg > 180 ? 1 : 0;
+  const p1 = polarToCartesian(cx, cy, rOuter, startDeg);
+  const p2 = polarToCartesian(cx, cy, rOuter, endDeg);
+  const p3 = polarToCartesian(cx, cy, rInner, endDeg);
+  const p4 = polarToCartesian(cx, cy, rInner, startDeg);
+  return [
+    `M ${p1.x} ${p1.y}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p2.x} ${p2.y}`,
+    `L ${p3.x} ${p3.y}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 0 ${p4.x} ${p4.y}`,
+    'Z',
+  ].join(' ');
+}
+
+export { polarToCartesian };
