@@ -38,20 +38,28 @@ export function getSeatPixelPosition(section, index) {
 // position (1-12, like a clock face) and a near/far ring — coarse, one-click
 // admin input, and completely separate from the seat grid above, so it can
 // never reintroduce per-seat overlap bugs.
-export const MAP_RING_RADIUS = { inner: 190, outer: 320 };
+//
+// Positions are expressed as RATIOS (fraction of the map container's own
+// half-width/half-height), not fixed pixels. A fixed-px version clipped
+// zones clean off the screen on narrow viewports — the container's own
+// left/top edge doesn't scroll into view when content overflows a
+// `overflow-x-hidden` page. Ratios scale with whatever size the container
+// actually renders at, so a zone is structurally guaranteed to stay inside
+// its container on any screen width.
+export const MAP_RING_RATIO = { inner: 0.46, outer: 0.72 };
 
 /**
- * @returns {{ x: number, y: number, angleDeg: number }}
+ * @returns {{ xRatio: number, yRatio: number, angleDeg: number }}
  */
 export function getSectionMapPosition(section) {
   const clockPosition = section.clock_position || 12;
-  const radius = MAP_RING_RADIUS[section.ring] ?? MAP_RING_RADIUS.inner;
+  const radiusRatio = MAP_RING_RATIO[section.ring] ?? MAP_RING_RATIO.inner;
   const angleDeg = clockPosition * 30 - 90; // 12 o'clock -> straight up
 
   const rad = (angleDeg * Math.PI) / 180;
   return {
-    x: Math.cos(rad) * radius,
-    y: Math.sin(rad) * radius,
+    xRatio: Math.cos(rad) * radiusRatio,
+    yRatio: Math.sin(rad) * radiusRatio,
     angleDeg,
   };
 }
