@@ -16,18 +16,14 @@ return new class extends Migration
             $table->decimal('price', 12, 2)->default(0);
             $table->unsignedInteger('row_count');
             $table->unsignedInteger('col_count');
-            $table->string('layout_type')->default('bowl'); // bowl | orchestra | grid
 
-            // Layout geometry — previously hardcoded per section *name* in the frontend
-            // (BookingPage.jsx's STAND_CONFIG), so any admin-created section that didn't
-            // match one of four hardcoded names collided with every other unmatched
-            // section at the same fallback position. Storing geometry as real data lets
-            // any number of sections be positioned independently from the admin form.
-            $table->integer('angle_start')->nullable(); // degrees, used by 'bowl'
-            $table->integer('angle_end')->nullable();   // degrees, used by 'bowl'
-            $table->unsignedInteger('radius_inner')->nullable(); // used by 'bowl'
-            $table->unsignedInteger('radius_outer')->nullable(); // used by 'bowl'
-            $table->integer('map_angle')->default(0);   // rotation offset, used by 'orchestra' | 'grid'
+            // Seat map is a straight cinema-style grid, selected one section at a
+            // time (like XXI) — no per-section angle/radius positioning needed.
+            // An earlier version tried to place every section on one shared
+            // curved stadium bowl (angle_start/angle_end/radius_inner/radius_outer),
+            // but that math made rows overlap or fan out unevenly whenever a
+            // section didn't fit the assumptions (too many rows for its radius
+            // range, etc.) — a straight grid can't have that problem structurally.
             $table->string('color')->default('#2563eb'); // hex, applied via inline style (not a Tailwind class)
 
             $table->text('view_image')->nullable();

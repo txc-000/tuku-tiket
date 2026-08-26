@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import SeatMonitor from './SeatMonitor'; // Pastikan file ini dibuat (kode ada di bawah)
-import SectionLayoutPicker from '../../components/SectionLayoutPicker';
 
 const formatIDR = (price) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price || 0);
 
@@ -34,10 +33,7 @@ export default function AdminDashboard() {
   // Forms
   const [eventForm, setEventForm] = useState({ title: '', date: '', venue: '', price: '', category: 'Konser', status: 'draft', image: '' });
   const [secForm, setSecForm] = useState({
-    name: '', floor_name: '', price: '', row_count: 8, col_count: 12,
-    // Geometri peta kursi — dulu section baru numpuk di posisi yang sama karena
-    // hardcode di frontend, sekarang ini beneran dikirim ke backend sebagai data.
-    layout_type: 'bowl', angle_start: -45, angle_end: 45, radius_inner: 220, radius_outer: 280, color: '#2563eb',
+    name: '', floor_name: '', price: '', row_count: 8, col_count: 12, color: '#2563eb',
   });
 
   useEffect(() => {
@@ -113,10 +109,7 @@ export default function AdminDashboard() {
       });
 
       fetchSections(selectedEventId);
-      setSecForm({
-        name: '', floor_name: '', price: '', row_count: 8, col_count: 12,
-        layout_type: 'bowl', angle_start: -45, angle_end: 45, radius_inner: 220, radius_outer: 280, color: '#2563eb',
-      });
+      setSecForm({ name: '', floor_name: '', price: '', row_count: 8, col_count: 12, color: '#2563eb' });
     } catch (err) {
       alert("Gagal membuat section: " + (err.response?.data?.message || err.message));
     } finally {
@@ -269,13 +262,10 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  {/* Posisi di peta stadion — ini yang bikin section baru tidak
-                      numpuk di posisi yang sama seperti dulu. Sudut & radius
-                      dipakai bareng oleh halaman booking pelanggan & monitor ini. */}
-                  <SectionLayoutPicker
-                    value={secForm}
-                    onChange={(patch) => setSecForm(prev => ({ ...prev, ...patch }))}
-                  />
+                  <div className="flex items-center gap-3 pt-1">
+                    <input type="color" className="h-10 w-14 rounded-lg cursor-pointer bg-transparent border border-white/10 shrink-0" value={secForm.color} onChange={e => setSecForm({...secForm, color: e.target.value})} />
+                    <p className="text-[8px] font-black uppercase text-slate-500">Warna Penanda Section</p>
+                  </div>
 
                   <button
                     type="submit" 

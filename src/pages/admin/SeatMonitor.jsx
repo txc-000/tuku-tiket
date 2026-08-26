@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import api from '../../lib/api';
 import echo from '../../lib/echo';
-import { getSeatPosition, getSectionSeatSize } from '../../lib/seatLayout';
+import { getSeatPixelPosition, SEAT_SIZE } from '../../lib/seatLayout';
 import {
   X, Loader2, User, Mail,
   Lock, Trash2, ZoomIn, ZoomOut, RefreshCcw
@@ -124,10 +124,6 @@ export default function SeatMonitor({ section }) {
   const sold = seats.filter(s => s.status === 'sold').length;
   const blocked = seats.filter(s => s.status === 'blocked').length;
   const currentRevenue = sold * (section.price || 0);
-  // Ini fungsi yang SAMA PERSIS dipakai BookingPage.jsx (src/lib/seatLayout.js) —
-  // apa yang admin lihat di sini sekarang dijamin sama dengan yang pelanggan
-  // lihat, tidak ada lagi dua rumus posisi yang bisa beda hasil.
-  const seatSize = getSectionSeatSize(section);
 
   return (
     <div className="space-y-8 pb-10 relative h-full">
@@ -210,7 +206,7 @@ export default function SeatMonitor({ section }) {
         ) : (
           <div ref={contentRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }}>
             {seats.map((seat, idx) => {
-              const { x, y, rotation } = getSeatPosition(section, idx);
+              const { x, y } = getSeatPixelPosition(section, idx);
 
               let colorClass = 'bg-green-500 border-green-700';
               if (seat.status === 'sold') colorClass = 'bg-red-600 border-red-800';
@@ -224,11 +220,11 @@ export default function SeatMonitor({ section }) {
                   className={`absolute rounded-t-sm border-b-2 flex items-center justify-center font-black text-white cursor-pointer hover:brightness-125 transition-all ${colorClass}`}
                   style={{
                     left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`,
-                    width: seatSize, height: seatSize, fontSize: Math.max(6, seatSize * 0.26),
-                    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                    width: SEAT_SIZE, height: SEAT_SIZE, fontSize: SEAT_SIZE * 0.28,
+                    transform: 'translate(-50%, -50%)',
                   }}
                 >
-                  <span style={{ transform: `rotate(${-rotation}deg)` }}>{seat.row_label}{seat.seat_number}</span>
+                  {seat.row_label}{seat.seat_number}
                 </div>
               );
             })}

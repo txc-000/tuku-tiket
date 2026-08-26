@@ -35,10 +35,6 @@ class SectionSeatGenerationTest extends TestCase
                 'price' => 500000,
                 'row_count' => 27, // deliberately past the 26-letter boundary
                 'col_count' => 3,
-                'angle_start' => -45,
-                'angle_end' => 45,
-                'radius_inner' => 220,
-                'radius_outer' => 280,
                 'color' => '#2563eb',
             ]);
 
@@ -52,9 +48,9 @@ class SectionSeatGenerationTest extends TestCase
 
     public function test_the_create_response_reflects_database_defaults_not_just_the_in_memory_model(): void
     {
-        // layout_type/map_angle/color have DB-level defaults; when omitted from the
-        // request, Eloquent's in-memory model after create() doesn't know about
-        // them unless the controller refreshes from the database.
+        // `color` has a DB-level default; when omitted from the request,
+        // Eloquent's in-memory model after create() doesn't know about it
+        // unless the controller refreshes from the database.
         $admin = User::factory()->admin()->create();
         $event = Event::factory()->create();
 
@@ -66,9 +62,7 @@ class SectionSeatGenerationTest extends TestCase
                 'col_count' => 2,
             ]);
 
-        $response->assertCreated()
-            ->assertJsonPath('data.layout_type', 'bowl')
-            ->assertJsonPath('data.color', '#2563eb');
+        $response->assertCreated()->assertJsonPath('data.color', '#2563eb');
     }
 
     public function test_a_section_cannot_be_created_without_admin_role(): void

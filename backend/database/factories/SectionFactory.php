@@ -25,12 +25,6 @@ class SectionFactory extends Factory
             'price' => fake()->randomElement([500000, 750000, 1500000]),
             'row_count' => 5,
             'col_count' => 10,
-            'layout_type' => 'bowl',
-            'angle_start' => -45,
-            'angle_end' => 45,
-            'radius_inner' => 220,
-            'radius_outer' => 280,
-            'map_angle' => 0,
             'color' => fake()->randomElement(['#2563eb', '#4f46e5', '#ea580c', '#d97706']),
         ];
     }

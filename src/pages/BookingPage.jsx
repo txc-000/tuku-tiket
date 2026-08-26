@@ -4,25 +4,22 @@ import api from "../lib/api";
 import echo from "../lib/echo";
 import { fetchCurrentUser } from "../lib/auth";
 import { guardDemo } from "../lib/demoMode";
-import { darken } from "../lib/color";
-import { getSeatPosition, getSectionSeatSize } from "../lib/seatLayout";
+import { getSeatGridCoords, SEAT_SIZE, SEAT_GAP } from "../lib/seatLayout";
 import Navbar from "../components/Navbar";
-import ClassModal from "../components/ClassModal";
 import PaymentModal from "../components/PaymentModal";
-import { Loader2, ArrowLeft, X, ZoomIn, ZoomOut, RefreshCcw } from "lucide-react";
+import { Loader2, ArrowLeft, X } from "lucide-react";
 
 export default function BookingPage() {
   const { eventId } = useParams();
   const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [sections, setSections] = useState([]);
-  const [activeModal, setActiveModal] = useState(null); 
+  const [activeSectionId, setActiveSectionId] = useState(null);
   const [showPayment, setShowPayment] = useState(false);
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     fetchData();
@@ -49,7 +46,9 @@ export default function BookingPage() {
         api.get(`/events/${eventId}/sections`),
       ]);
       setEvent(evRes.data);
-      setSections(secRes.data || []);
+      const fetchedSections = secRes.data || [];
+      setSections(fetchedSections);
+      setActiveSectionId(prev => prev ?? fetchedSections[0]?.id ?? null);
     } catch (err) {
       console.error("Gagal memuat data event:", err.message);
       setLoadError("Gagal memuat data event. Periksa koneksi kamu dan coba lagi.");
@@ -58,9 +57,9 @@ export default function BookingPage() {
     }
   }
 
-  // Race condition kursi ganda sekarang ditangani server-side lewat row locking
+  // Race condition kursi ganda ditangani server-side lewat row locking
   // Postgres (lihat BookingController@store di backend) — tidak perlu lagi
-  // filter+rollback manual di sini seperti sebelumnya.
+  // filter+rollback manual di sini.
   const confirmBooking = async (guestInfo) => {
     if (guardDemo()) return;
     setLoading(true);
@@ -98,48 +97,11 @@ export default function BookingPage() {
     }
   };
 
-  const renderSection = (section) => {
-    const seats = [...section.seats].sort((a, b) => a.id - b.id);
-    const color = section.color || '#475569';
-    // Ukuran kursi menyesuaikan kerapatan section (lihat src/lib/seatLayout.js)
-    // supaya baris tidak saling tumpuk saat section punya banyak baris di
-    // rentang radius yang sempit (venue non-stadium seperti conference hall).
-    const seatSize = getSectionSeatSize(section);
-
-    return (
-      <div className="absolute inset-0 pointer-events-none z-20">
-        {seats.map((seat, i) => {
-          const { x, y, rotation } = getSeatPosition(section, i);
-          const isSelected = cart.find(s => s.id === seat.id);
-          const isTaken = seat.status === 'sold' || seat.status === 'checked-in';
-          const isHeld = seat.status === 'booked' || seat.status === 'blocked';
-          const isAvailable = !isTaken && !isHeld && !isSelected;
-          const seatLabel = `${seat.row_label}${seat.seat_number}`;
-          const statusLabel = isTaken ? 'Terjual' : isHeld ? 'Tidak tersedia' : isSelected ? 'Dipilih' : 'Tersedia';
-
-          return (
-            <div
-              key={seat.id}
-              title={`${section.name} · Kursi ${seatLabel} · Rp ${Number(section.price || 0).toLocaleString('id-ID')} · ${statusLabel}`}
-              onClick={(e) => { e.stopPropagation(); if (seat.status === 'available') setActiveModal({ seat, section }); }}
-              className={`absolute rounded-t-sm flex items-center justify-center font-bold transition-all border-b-2 pointer-events-auto
-                ${isTaken ? 'bg-slate-800 border-slate-900 opacity-25 grayscale cursor-not-allowed pointer-events-none' :
-                  isHeld ? 'bg-rose-500 border-rose-700 text-rose-950 opacity-80 cursor-not-allowed pointer-events-none' :
-                  isSelected ? 'bg-white border-slate-300 text-blue-600 scale-125 z-50 shadow-[0_0_15px_white] ring-2 ring-blue-400 cursor-pointer' :
-                  'text-white/80 cursor-pointer hover:scale-125 hover:z-50 hover:brightness-125'}`}
-              style={{
-                left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`,
-                width: seatSize, height: seatSize, fontSize: Math.max(6, seatSize * 0.26),
-                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                ...(isAvailable ? { backgroundColor: color, borderBottomColor: darken(color) } : {}),
-              }}
-            >
-              {seatLabel}
-            </div>
-          );
-        })}
-      </div>
-    );
+  const toggleSeat = (seat, section) => {
+    if (seat.status !== 'available') return;
+    const exists = cart.find(i => i.id === seat.id);
+    if (exists) setCart(cart.filter(i => i.id !== seat.id));
+    else setCart([...cart, { ...seat, price: section.price }]);
   };
 
   if (loading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={40} /></div>;
@@ -155,67 +117,134 @@ export default function BookingPage() {
   );
 
   const totalSeatCount = sections.reduce((a, s) => a + (s.seats?.length || 0), 0);
+  const activeSection = sections.find(s => s.id === activeSectionId);
+
+  // Kelompokkan kursi section aktif per baris, seperti pemilihan kursi bioskop —
+  // baris lurus, jarak tetap, tidak akan pernah tumpuk atau tidak simetris
+  // apa pun jumlah baris/kolomnya (lihat src/lib/seatLayout.js).
+  const rows = [];
+  if (activeSection) {
+    const seatsSorted = [...activeSection.seats].sort((a, b) => a.id - b.id);
+    seatsSorted.forEach((seat, i) => {
+      const { row } = getSeatGridCoords(activeSection, i);
+      if (!rows[row]) rows[row] = [];
+      rows[row].push(seat);
+    });
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col overflow-x-hidden">
       <Navbar />
 
-      {/* Stadium Layout Design */}
-      <div className="flex-1 relative flex items-center justify-center min-h-[850px] overflow-hidden">
-
-        {totalSeatCount === 0 ? (
-          <div className="text-center px-6">
-            <p className="text-slate-400 font-bold uppercase tracking-widest text-sm mb-1">Peta kursi belum tersedia</p>
-            <p className="text-slate-600 text-xs">Admin belum mengatur layout kursi untuk event ini.</p>
-          </div>
-        ) : (
-          <div
-            className="relative"
-            style={{ transform: `scale(${zoom})`, transition: 'transform 0.2s ease' }}
-          >
-            <div className="relative z-0 w-72 h-44 bg-green-900/10 border-2 border-green-500/30 rounded-xl flex items-center justify-center shadow-2xl">
-              <span className="text-green-500/40 font-black tracking-[1em] text-[10px] uppercase italic">PITCH</span>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              {sections.map(sec => <div key={sec.id} className="w-full h-full absolute pointer-events-none">{renderSection(sec)}</div>)}
+      <div className="flex-1 pt-28 pb-16 px-6">
+        <div className="max-w-5xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center gap-4 mb-10">
+            <button onClick={() => navigate('/')} className="p-3 bg-white/5 rounded-2xl transition-all active:scale-90 shrink-0"><ArrowLeft size={22}/></button>
+            <div>
+              <h1 className="font-black text-2xl md:text-3xl tracking-tighter uppercase italic">{event?.title}</h1>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{event?.venue}</p>
             </div>
           </div>
-        )}
 
-        {/* Kontrol Zoom */}
-        {totalSeatCount > 0 && (
-          <div className="absolute top-6 right-6 flex flex-col gap-2 z-30">
-            <button onClick={() => setZoom(z => Math.min(z + 0.2, 2.2))} className="bg-white/5 hover:bg-blue-600 border border-white/10 text-white p-3 rounded-full shadow-lg backdrop-blur-md transition-all active:scale-90"><ZoomIn size={18} /></button>
-            <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.5))} className="bg-white/5 hover:bg-blue-600 border border-white/10 text-white p-3 rounded-full shadow-lg backdrop-blur-md transition-all active:scale-90"><ZoomOut size={18} /></button>
-            <button onClick={() => setZoom(1)} className="bg-white/5 hover:bg-blue-600 border border-white/10 text-white p-3 rounded-full shadow-lg backdrop-blur-md transition-all active:scale-90"><RefreshCcw size={16} /></button>
-          </div>
-        )}
+          {totalSeatCount === 0 ? (
+            <div className="text-center py-32">
+              <p className="text-slate-400 font-bold uppercase tracking-widest text-sm mb-1">Peta kursi belum tersedia</p>
+              <p className="text-slate-600 text-xs">Admin belum mengatur layout kursi untuk event ini.</p>
+            </div>
+          ) : (
+            <>
+              {/* Pilihan Section — kaya pilih studio bioskop */}
+              <div className="flex gap-3 overflow-x-auto pb-3 mb-10 -mx-1 px-1">
+                {sections.map(sec => {
+                  const total = sec.seats.length;
+                  const available = sec.seats.filter(s => s.status === 'available').length;
+                  const isActive = sec.id === activeSectionId;
+                  return (
+                    <button
+                      key={sec.id}
+                      onClick={() => setActiveSectionId(sec.id)}
+                      className={`text-left shrink-0 min-w-[168px] px-5 py-4 rounded-2xl border transition-all ${
+                        isActive ? 'bg-white/10 border-white/40' : 'bg-white/5 border-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: sec.color || '#475569' }} />
+                        <span className="font-black text-xs uppercase tracking-wide truncate">{sec.name}</span>
+                      </div>
+                      {sec.floor_name && <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">{sec.floor_name}</p>}
+                      <p className="text-blue-400 font-bold text-sm mb-0.5">Rp {Number(sec.price).toLocaleString('id-ID')}</p>
+                      <p className="text-[10px] text-slate-500 font-bold">{available}/{total} tersedia</p>
+                    </button>
+                  );
+                })}
+              </div>
 
-        {/* Legenda Status Kursi */}
-        {totalSeatCount > 0 && (
-          <div className="absolute top-6 left-6 z-30 bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl px-5 py-4 space-y-2">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Keterangan</p>
-            <div className="flex items-center gap-2 text-[10px] text-slate-300"><span className="w-3 h-3 rounded-sm bg-slate-500" /> Tersedia</div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-300"><span className="w-3 h-3 rounded-sm bg-white" /> Dipilih</div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-300"><span className="w-3 h-3 rounded-sm bg-rose-500" /> Ditahan</div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-300"><span className="w-3 h-3 rounded-sm bg-slate-800 opacity-60" /> Terjual</div>
-          </div>
-        )}
+              {activeSection && (
+                <div>
+                  {/* Legenda */}
+                  <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-8 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-600" /> Tersedia</span>
+                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-white" /> Dipilih</span>
+                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-rose-500" /> Ditahan</span>
+                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-900" /> Terjual</span>
+                  </div>
+
+                  {/* Panggung / Layar */}
+                  <div className="max-w-md mx-auto mb-10">
+                    <div className="h-1.5 rounded-full bg-gradient-to-r from-transparent via-blue-500 to-transparent mb-2 shadow-[0_0_20px_2px_rgba(59,130,246,0.5)]" />
+                    <p className="text-center text-[10px] font-black uppercase tracking-[0.5em] text-slate-500">Panggung / Layar</p>
+                  </div>
+
+                  {/* Deretan kursi */}
+                  <div className="overflow-x-auto pb-4">
+                    <div className="flex flex-col items-center gap-2 min-w-fit mx-auto">
+                      {rows.map((rowSeats, rowIdx) => (
+                        <div key={rowIdx} className="flex items-center gap-3">
+                          <span className="w-5 text-right text-[10px] font-black text-slate-500 shrink-0">{rowSeats[0]?.row_label}</span>
+                          <div className="flex" style={{ gap: SEAT_GAP }}>
+                            {rowSeats.map(seat => {
+                              const isSelected = !!cart.find(s => s.id === seat.id);
+                              const isTaken = seat.status === 'sold' || seat.status === 'checked-in';
+                              const isHeld = seat.status === 'booked' || seat.status === 'blocked';
+                              const seatLabel = `${seat.row_label}${seat.seat_number}`;
+                              const statusLabel = isTaken ? 'Terjual' : isHeld ? 'Tidak tersedia' : isSelected ? 'Dipilih' : 'Tersedia';
+
+                              return (
+                                <button
+                                  key={seat.id}
+                                  type="button"
+                                  title={`Kursi ${seatLabel} · Rp ${Number(activeSection.price || 0).toLocaleString('id-ID')} · ${statusLabel}`}
+                                  onClick={() => toggleSeat(seat, activeSection)}
+                                  disabled={seat.status !== 'available'}
+                                  className={`rounded-t-md border-b-2 flex items-center justify-center font-bold transition-all
+                                    ${isTaken ? 'bg-slate-900 border-black opacity-40 grayscale cursor-not-allowed' :
+                                      isHeld ? 'bg-rose-500 border-rose-700 text-rose-950 opacity-80 cursor-not-allowed' :
+                                      isSelected ? 'bg-white border-slate-300 text-blue-600 scale-110 shadow-[0_0_12px_white] cursor-pointer' :
+                                      'bg-slate-700 border-slate-800 text-slate-300 hover:bg-slate-600 hover:scale-110 cursor-pointer'}`}
+                                  style={{ width: SEAT_SIZE, height: SEAT_SIZE, fontSize: SEAT_SIZE * 0.32 }}
+                                >
+                                  {seat.seat_number}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Booking Bar */}
       <div className="bg-slate-900/95 backdrop-blur-xl p-6 md:p-8 border-t border-white/5 z-[60] sticky bottom-0">
-        <div className="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-6 text-left">
-          <div className="flex items-center gap-4">
-             <button onClick={() => navigate('/')} className="p-3 bg-white/5 rounded-2xl transition-all active:scale-90"><ArrowLeft size={24}/></button>
-             <div>
-               <h1 className="font-black text-2xl tracking-tighter uppercase">{event?.title}</h1>
-               <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{event?.venue}</p>
-             </div>
-          </div>
-
+        <div className="max-w-6xl mx-auto flex flex-wrap justify-end items-center gap-6 text-left">
           {cart.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto max-w-full md:max-w-xs py-1 order-3 md:order-none w-full md:w-auto">
+            <div className="flex gap-2 overflow-x-auto max-w-full md:max-w-xs py-1 order-3 md:order-none w-full md:w-auto md:mr-auto">
               {cart.map(s => (
                 <div key={s.id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full pl-4 pr-1.5 py-1.5 shrink-0">
                   <span className="text-xs font-bold text-white">{s.row_label}{s.seat_number}</span>
@@ -246,20 +275,6 @@ export default function BookingPage() {
           </div>
         </div>
       </div>
-
-      {activeModal && (
-        <ClassModal 
-          seat={activeModal.seat} 
-          section={activeModal.section} 
-          isSelected={cart.find(s => s.id === activeModal.seat.id)} 
-          onBook={(s, sec) => { 
-            const exists = cart.find(i => i.id === s.id); 
-            if (exists) setCart(cart.filter(i => i.id !== s.id)); 
-            else setCart([...cart, {...s, price: sec.price}]); 
-          }} 
-          onClose={() => setActiveModal(null)} 
-        />
-      )}
 
       {showPayment && (
         <PaymentModal

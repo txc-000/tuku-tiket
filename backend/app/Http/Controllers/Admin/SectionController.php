@@ -46,10 +46,9 @@ class SectionController extends Controller
                 Seat::insert($chunk);
             }
 
-            // Columns like layout_type/map_angle/color have DB-level defaults that
-            // weren't part of the insert payload when omitted — refresh so the
-            // response reflects what Postgres actually stored, not an in-memory
-            // model missing those attributes.
+            // `color` has a DB-level default that isn't part of the insert
+            // payload when omitted — refresh so the response reflects what
+            // Postgres actually stored, not an in-memory model missing it.
             return $section->refresh();
         });
 
