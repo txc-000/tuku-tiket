@@ -13,6 +13,18 @@ export default function ManageSections({ eventId }) {
     map_angle: 0
   });
 
+  // Ubah index baris jadi label A, B, ..., Z, AA, AB, ... (gaya kolom Excel)
+  const getRowLabel = (index) => {
+    let n = index + 1;
+    let label = '';
+    while (n > 0) {
+      const rem = (n - 1) % 26;
+      label = String.fromCharCode(65 + rem) + label;
+      n = Math.floor((n - 1) / 26);
+    }
+    return label;
+  };
+
   const handleAddSection = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -24,11 +36,39 @@ export default function ManageSections({ eventId }) {
       .select()
       .single();
 
-    if (!secError) {
-      // 2. Otomatis buat kursi (seats) untuk section tersebut
-      // Ini akan menjalankan logika generate series di sisi server/client
-      alert("Section & Layout berhasil disimpan!");
+    if (secError) {
+      alert("Gagal menyimpan section: " + secError.message);
+      setLoading(false);
+      return;
     }
+
+    // 2. Otomatis buat kursi (seats) untuk section tersebut
+    const rowCount = Number(sectionData.row_count) || 0;
+    const colCount = Number(sectionData.col_count) || 0;
+    const seatsToInsert = [];
+    for (let r = 0; r < rowCount; r++) {
+      const rowLabel = getRowLabel(r);
+      for (let c = 1; c <= colCount; c++) {
+        seatsToInsert.push({
+          section_id: section.id,
+          row_label: rowLabel,
+          seat_number: c,
+          status: 'available',
+        });
+      }
+    }
+
+    if (seatsToInsert.length > 0) {
+      const { error: seatsError } = await supabase.from('seats').insert(seatsToInsert);
+      if (seatsError) {
+        alert("Section tersimpan, tapi gagal membuat kursi: " + seatsError.message);
+        setLoading(false);
+        return;
+      }
+    }
+
+    alert(`Section & Layout berhasil disimpan! (${seatsToInsert.length} kursi dibuat)`);
+    setSectionData({ name: '', price: '', row_count: 5, col_count: 10, layout_type: 'bowl', map_angle: 0 });
     setLoading(false);
   };
 
@@ -42,8 +82,8 @@ export default function ManageSections({ eventId }) {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nama Section</label>
-            <input type="text" placeholder="Contoh: VIP West" className="w-full bg-slate-950 border border-white/5 rounded-2xl py-3 px-4 outline-none focus:ring-2 focus:ring-blue-600 text-sm" 
-              onChange={e => setSectionData({...sectionData, name: e.target.value})} required />
+            <input type="text" placeholder="Contoh: VIP West" className="w-full bg-slate-950 border border-white/5 rounded-2xl py-3 px-4 outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+              value={sectionData.name} onChange={e => setSectionData({...sectionData, name: e.target.value})} required />
           </div>
 
           <div className="space-y-1">
@@ -60,21 +100,27 @@ export default function ManageSections({ eventId }) {
           </div>
         </div>
 
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Harga per Kursi (Rp)</label>
+          <input type="number" placeholder="750000" className="w-full bg-slate-950 border border-white/5 rounded-2xl py-3 px-4 outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+            value={sectionData.price} onChange={e => setSectionData({...sectionData, price: e.target.value})} required min="0" />
+        </div>
+
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Baris</label>
-            <input type="number" className="w-full bg-slate-950 border border-white/5 rounded-2xl py-3 px-4 outline-none" 
-              value={sectionData.row_count} onChange={e => setSectionData({...sectionData, row_count: e.target.value})} />
+            <input type="number" className="w-full bg-slate-950 border border-white/5 rounded-2xl py-3 px-4 outline-none"
+              value={sectionData.row_count} onChange={e => setSectionData({...sectionData, row_count: e.target.value})} min="1" />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Kursi/Baris</label>
-            <input type="number" className="w-full bg-slate-950 border border-white/5 rounded-2xl py-3 px-4 outline-none" 
-              value={sectionData.col_count} onChange={e => setSectionData({...sectionData, col_count: e.target.value})} />
+            <input type="number" className="w-full bg-slate-950 border border-white/5 rounded-2xl py-3 px-4 outline-none"
+              value={sectionData.col_count} onChange={e => setSectionData({...sectionData, col_count: e.target.value})} min="1" />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Sudut Peta (°)</label>
-            <input type="number" placeholder="0-360" className="w-full bg-slate-950 border border-white/5 rounded-2xl py-3 px-4 outline-none" 
-              onChange={e => setSectionData({...sectionData, map_angle: e.target.value})} />
+            <input type="number" placeholder="0-360" className="w-full bg-slate-950 border border-white/5 rounded-2xl py-3 px-4 outline-none"
+              value={sectionData.map_angle} onChange={e => setSectionData({...sectionData, map_angle: e.target.value})} />
           </div>
         </div>
 

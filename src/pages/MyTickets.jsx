@@ -24,15 +24,30 @@ export default function MyTickets() {
   const navigate = useNavigate();
   const [myTickets, setMyTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // TODO: Ganti dengan user.email dari Context/Auth Session kamu
-  const userEmail = "pembeli@example.com"; 
+  const [userEmail, setUserEmail] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    fetchMyTickets();
+    checkAuthAndFetch();
   }, []);
 
-  async function fetchMyTickets() {
+  async function checkAuthAndFetch() {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    setAuthChecked(true);
+
+    if (!user?.email) {
+      setUserEmail(null);
+      setMyTickets([]);
+      setLoading(false);
+      return;
+    }
+
+    setUserEmail(user.email);
+    await fetchMyTickets(user.email);
+  }
+
+  async function fetchMyTickets(email) {
     setLoading(true);
     try {
       // Mengambil data tiket + warna tema (theme_color) dari event
@@ -42,11 +57,11 @@ export default function MyTickets() {
           id, row_label, seat_number,
           sections (name, floor_name, price),
           transactions!inner (
-            customer_email, 
-            events (title, date, venue, image, theme_color) 
+            customer_email,
+            events (title, date, venue, image, theme_color)
           )
         `)
-        .eq('transactions.customer_email', userEmail)
+        .eq('transactions.customer_email', email)
         .order('id', { ascending: false });
 
       if (error) throw error;
@@ -113,6 +128,20 @@ export default function MyTickets() {
           <div className="flex flex-col items-center justify-center py-40">
              <Loader2 className="animate-spin text-white mb-4" size={40} />
              <p className="text-zinc-500 text-xs uppercase tracking-widest animate-pulse">Memuat Tiket...</p>
+          </div>
+        ) : authChecked && !userEmail ? (
+          // --- BELUM LOGIN ---
+          <div className="flex flex-col items-center justify-center py-32 bg-zinc-900/30 rounded-[48px] border border-dashed border-white/5">
+            <div className="bg-zinc-800 p-8 rounded-full mb-6 opacity-50">
+               <TicketIcon size={64} className="text-zinc-500" />
+            </div>
+            <h2 className="text-2xl font-black text-white mb-2 uppercase italic">Kamu Belum Login</h2>
+            <p className="text-zinc-500 text-sm mb-8 max-w-md text-center">
+              Login terlebih dahulu untuk melihat tiket yang sudah kamu beli.
+            </p>
+            <button onClick={() => navigate('/login')} className="px-10 py-4 bg-white text-black rounded-full font-black text-xs uppercase tracking-widest hover:bg-cyan-400 hover:scale-105 transition-all">
+              Login Sekarang
+            </button>
           </div>
         ) : myTickets.length > 0 ? (
           <div className="grid gap-12">
