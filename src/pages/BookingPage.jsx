@@ -5,6 +5,7 @@ import echo from "../lib/echo";
 import { fetchCurrentUser } from "../lib/auth";
 import { guardDemo } from "../lib/demoMode";
 import { darken } from "../lib/color";
+import { getSeatPosition, getSectionSeatSize } from "../lib/seatLayout";
 import Navbar from "../components/Navbar";
 import ClassModal from "../components/ClassModal";
 import PaymentModal from "../components/PaymentModal";
@@ -99,27 +100,16 @@ export default function BookingPage() {
 
   const renderSection = (section) => {
     const seats = [...section.seats].sort((a, b) => a.id - b.id);
-    // Geometri sekarang data dari admin (lihat ManageSections), bukan lagi
-    // hardcode per-nama-section di frontend — section apa pun bisa diposisikan
-    // tanpa ubah kode.
-    const angleStart = section.angle_start ?? -45;
-    const angleEnd = section.angle_end ?? 45;
-    const radiusInner = section.radius_inner ?? 200;
-    const radiusOuter = section.radius_outer ?? 260;
     const color = section.color || '#475569';
-    // Hindari pembagian dengan 0 (NaN) saat section hanya punya 1 kolom kursi
-    const angleStep = (angleEnd - angleStart) / (section.col_count > 1 ? section.col_count - 1 : 1);
+    // Ukuran kursi menyesuaikan kerapatan section (lihat src/lib/seatLayout.js)
+    // supaya baris tidak saling tumpuk saat section punya banyak baris di
+    // rentang radius yang sempit (venue non-stadium seperti conference hall).
+    const seatSize = getSectionSeatSize(section);
 
     return (
       <div className="absolute inset-0 pointer-events-none z-20">
         {seats.map((seat, i) => {
-          const row = Math.floor(i / section.col_count);
-          const col = i % section.col_count;
-          const angle = angleStart + col * angleStep;
-          const rad = (angle * Math.PI) / 180;
-          const radius = radiusInner + ((radiusOuter - radiusInner) / (section.row_count > 1 ? section.row_count - 1 : 1)) * row;
-          const x = Math.cos(rad) * radius;
-          const y = Math.sin(rad) * radius;
+          const { x, y, rotation } = getSeatPosition(section, i);
           const isSelected = cart.find(s => s.id === seat.id);
           const isTaken = seat.status === 'sold' || seat.status === 'checked-in';
           const isHeld = seat.status === 'booked' || seat.status === 'blocked';
@@ -132,14 +122,15 @@ export default function BookingPage() {
               key={seat.id}
               title={`${section.name} · Kursi ${seatLabel} · Rp ${Number(section.price || 0).toLocaleString('id-ID')} · ${statusLabel}`}
               onClick={(e) => { e.stopPropagation(); if (seat.status === 'available') setActiveModal({ seat, section }); }}
-              className={`absolute w-7 h-7 rounded-t-sm flex items-center justify-center text-[7px] font-bold transition-all border-b-2 pointer-events-auto
+              className={`absolute rounded-t-sm flex items-center justify-center font-bold transition-all border-b-2 pointer-events-auto
                 ${isTaken ? 'bg-slate-800 border-slate-900 opacity-25 grayscale cursor-not-allowed pointer-events-none' :
                   isHeld ? 'bg-rose-500 border-rose-700 text-rose-950 opacity-80 cursor-not-allowed pointer-events-none' :
                   isSelected ? 'bg-white border-slate-300 text-blue-600 scale-125 z-50 shadow-[0_0_15px_white] ring-2 ring-blue-400 cursor-pointer' :
                   'text-white/80 cursor-pointer hover:scale-125 hover:z-50 hover:brightness-125'}`}
               style={{
                 left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`,
-                transform: `translate(-50%, -50%) rotate(${angle + 90}deg)`,
+                width: seatSize, height: seatSize, fontSize: Math.max(6, seatSize * 0.26),
+                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
                 ...(isAvailable ? { backgroundColor: color, borderBottomColor: darken(color) } : {}),
               }}
             >

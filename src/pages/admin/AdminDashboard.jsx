@@ -37,7 +37,7 @@ export default function AdminDashboard() {
     name: '', floor_name: '', price: '', row_count: 8, col_count: 12,
     // Geometri peta kursi — dulu section baru numpuk di posisi yang sama karena
     // hardcode di frontend, sekarang ini beneran dikirim ke backend sebagai data.
-    angle_start: -45, angle_end: 45, radius_inner: 220, radius_outer: 280, color: '#2563eb',
+    layout_type: 'bowl', angle_start: -45, angle_end: 45, radius_inner: 220, radius_outer: 280, color: '#2563eb',
   });
 
   useEffect(() => {
@@ -115,7 +115,7 @@ export default function AdminDashboard() {
       fetchSections(selectedEventId);
       setSecForm({
         name: '', floor_name: '', price: '', row_count: 8, col_count: 12,
-        angle_start: -45, angle_end: 45, radius_inner: 220, radius_outer: 280, color: '#2563eb',
+        layout_type: 'bowl', angle_start: -45, angle_end: 45, radius_inner: 220, radius_outer: 280, color: '#2563eb',
       });
     } catch (err) {
       alert("Gagal membuat section: " + (err.response?.data?.message || err.message));

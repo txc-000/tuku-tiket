@@ -57,9 +57,13 @@ class EventSeeder extends Seeder
             status: 'published',
             image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=1000',
             themeColor: '#8b5cf6',
+            // Grid, bukan bowl — aula konferensi punya baris/kolom lurus, beda
+            // dari stadion. Bowl dipaksakan ke venue ini yang bikin baris
+            // tumpuk (radius sempit, baris banyak) dan kolom jadi renggang
+            // tidak rata di ujung — grid selalu simetris karena spasinya tetap.
             sections: [
-                ['name' => 'Main Hall', 'floor_name' => 'Ground Floor', 'price' => 350000, 'row_count' => 10, 'col_count' => 14, 'angle_start' => -60, 'angle_end' => 60, 'radius_inner' => 180, 'radius_outer' => 320, 'color' => '#7c3aed'],
-                ['name' => 'Balcony', 'floor_name' => '2nd Floor', 'price' => 550000, 'row_count' => 3, 'col_count' => 14, 'angle_start' => -60, 'angle_end' => 60, 'radius_inner' => 130, 'radius_outer' => 165, 'color' => '#a855f7'],
+                ['name' => 'Main Hall', 'floor_name' => 'Ground Floor', 'price' => 350000, 'row_count' => 10, 'col_count' => 14, 'layout_type' => 'grid', 'angle_start' => 80, 'angle_end' => 100, 'radius_inner' => 180, 'radius_outer' => 320, 'color' => '#7c3aed'],
+                ['name' => 'Balcony', 'floor_name' => '2nd Floor', 'price' => 550000, 'row_count' => 3, 'col_count' => 14, 'layout_type' => 'grid', 'angle_start' => 80, 'angle_end' => 100, 'radius_inner' => 450, 'radius_outer' => 490, 'color' => '#a855f7'],
             ],
         );
 
