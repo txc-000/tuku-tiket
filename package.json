@@ -10,12 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.95.3",
+    "axios": "^1.19.0",
     "clsx": "^2.1.1",
     "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.1.0",
+    "laravel-echo": "^2.4.0",
     "lucide-react": "^0.563.0",
+    "pusher-js": "^8.6.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

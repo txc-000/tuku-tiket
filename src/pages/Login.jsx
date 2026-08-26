@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { login } from '../lib/auth';
+import { guardDemo } from '../lib/demoMode';
 import { useNavigate, Link } from 'react-router-dom';
 import { LogIn, Mail, Lock, Loader2, ArrowLeft, Ticket } from 'lucide-react';
 
@@ -9,56 +10,18 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  /**
-   * FUNGSI LOGIN UTAMA
-   * Menangani autentikasi dan pengalihan berdasarkan Role.
-   */
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (guardDemo()) return;
+
     setLoading(true);
-    console.log("--- Memulai Proses Login ---");
-
     try {
-      // 1. Authentikasi via Supabase Auth
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (authError) {
-        console.error("Gagal Auth:", authError.message);
-        alert(`Gagal Masuk: ${authError.message}`);
-        return; // Keluar dari fungsi jika auth gagal
-      }
-
-      console.log("Auth Sukses. Mencari data profil untuk ID:", data.user.id);
-
-      // 2. Ambil Role dari tabel profiles
-      // Menggunakan .maybeSingle() agar tidak error jika data profil benar-benar tidak ada
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error("Gagal mengambil profil:", profileError.message);
-        navigate('/'); // Default ke Home jika profil bermasalah
-      } else if (profile?.role === 'admin') {
-        console.log("Role Admin terdeteksi. Mengalihkan ke Dashboard...");
-        navigate('/admin');
-      } else {
-        console.log("Role User terdeteksi. Mengalihkan ke Beranda...");
-        navigate('/');
-      }
-
+      const user = await login(email, password);
+      navigate(user.role === 'admin' ? '/admin' : '/');
     } catch (err) {
-      console.error("Fatal Error:", err);
-      alert("Terjadi kesalahan sistem. Periksa koneksi internet atau konfigurasi Supabase Anda.");
+      alert(`Gagal Masuk: ${err.response?.data?.message || err.message}`);
     } finally {
-      // Menjamin loading berhenti apa pun yang terjadi
       setLoading(false);
-      console.log("--- Proses Login Selesai ---");
     }
   };
 

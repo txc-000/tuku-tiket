@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { register } from '../lib/auth';
+import { guardDemo } from '../lib/demoMode';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus, Mail, Lock, User, Loader2, ArrowLeft } from 'lucide-react';
 
@@ -10,20 +11,20 @@ export default function Register() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (guardDemo()) return;
+
     setLoading(true);
-
-    const { error } = await supabase.auth.signUp({
-      email: formData.email,
-      password: formData.password,
-      options: { data: { full_name: formData.fullName } }
-    });
-
-    if (error) alert("Gagal Daftar: " + error.message);
-    else {
+    try {
+      await register(formData.fullName, formData.email, formData.password);
       alert("Berhasil! Silakan Login.");
       navigate('/login');
+    } catch (err) {
+      const errors = err.response?.data?.errors;
+      const message = errors ? Object.values(errors).flat().join('\n') : err.message;
+      alert("Gagal Daftar: " + message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

@@ -1,17 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase";
+import api from "../lib/api";
+import echo from "../lib/echo";
+import { fetchCurrentUser } from "../lib/auth";
+import { guardDemo } from "../lib/demoMode";
+import { darken } from "../lib/color";
 import Navbar from "../components/Navbar";
 import ClassModal from "../components/ClassModal";
 import PaymentModal from "../components/PaymentModal";
 import { Loader2, ArrowLeft, X, ZoomIn, ZoomOut, RefreshCcw } from "lucide-react";
-
-const STAND_CONFIG = {
-  "VIP East":    { start: -45,  end: 45,   inner: 220, outer: 280, color: "bg-blue-600 border-blue-800" },
-  "VIP West":    { start: 135,  end: 225,  inner: 220, outer: 280, color: "bg-indigo-600 border-indigo-800" },
-  "North Stand": { start: -135, end: -45,  inner: 250, outer: 340, color: "bg-orange-600 border-orange-800" },
-  "South Stand": { start: 45,   end: 135,  inner: 250, outer: 340, color: "bg-amber-600 border-amber-800" },
-};
 
 export default function BookingPage() {
   const { eventId } = useParams();
@@ -28,38 +25,30 @@ export default function BookingPage() {
 
   useEffect(() => {
     fetchData();
-    fetchUserProfile();
+    fetchCurrentUser().then(setProfile);
 
-    // Real-time listener untuk update status kursi
-    const channel = supabase.channel("live-seats").on("postgres_changes", 
-      { event: "UPDATE", schema: "public", table: "seats" }, (p) => {
-        setSections(curr => curr.map(sec => ({
-          ...sec, seats: sec.seats.map(s => s.id === p.new.id ? p.new : s)
-        })));
-      }).subscribe();
+    // Real-time listener untuk update status kursi, di-scope ke event ini saja
+    echo.channel(`event.${eventId}.seats`).listen('.seat.updated', (seat) => {
+      setSections(curr => curr.map(sec => (
+        sec.id === seat.section_id
+          ? { ...sec, seats: sec.seats.map(s => (s.id === seat.id ? { ...s, ...seat } : s)) }
+          : sec
+      )));
+    });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { echo.leave(`event.${eventId}.seats`); };
   }, [eventId]);
-
-  async function fetchUserProfile() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      // Selalu pakai email dari auth session (bukan kolom profiles.email yang mungkin kosong/basi)
-      setProfile({ ...data, email: user.email });
-    }
-  }
 
   async function fetchData() {
     setLoading(true);
     setLoadError(null);
     try {
-      const { data: ev, error: evError } = await supabase.from("events").select("*").eq("id", eventId).single();
-      if (evError) throw evError;
-      const { data: sec, error: secError } = await supabase.from("sections").select("*, seats(*)").eq("event_id", eventId);
-      if (secError) throw secError;
-      setEvent(ev);
-      setSections(sec || []);
+      const [{ data: evRes }, { data: secRes }] = await Promise.all([
+        api.get(`/events/${eventId}`),
+        api.get(`/events/${eventId}/sections`),
+      ]);
+      setEvent(evRes.data);
+      setSections(secRes.data || []);
     } catch (err) {
       console.error("Gagal memuat data event:", err.message);
       setLoadError("Gagal memuat data event. Periksa koneksi kamu dan coba lagi.");
@@ -68,70 +57,41 @@ export default function BookingPage() {
     }
   }
 
-  // --- LOGIKA UTAMA: SIMULASI PAYMENT & TRANSACTION ID ---
-  const confirmBooking = async () => {
+  // Race condition kursi ganda sekarang ditangani server-side lewat row locking
+  // Postgres (lihat BookingController@store di backend) — tidak perlu lagi
+  // filter+rollback manual di sini seperti sebelumnya.
+  const confirmBooking = async (guestInfo) => {
+    if (guardDemo()) return;
     setLoading(true);
     try {
-      const totalAmount = cart.reduce((a, b) => a + (Number(b.price) || 0), 0);
+      const { data } = await api.post('/transactions', {
+        event_id: eventId,
+        seat_ids: cart.map(s => s.id),
+        customer_name: profile?.full_name || guestInfo?.name,
+        customer_email: profile?.email || guestInfo?.email,
+      });
 
-      // 1. Simpan Transaksi dengan status 'pending' (Simulasi Payment Gateway)
-      const { data: trx, error: trxError } = await supabase
-        .from('transactions')
-        .insert([{
-          event_id: eventId,
-          customer_name: profile?.full_name || "User Testing",
-          customer_email: profile?.email || "pembeli@example.com",
-          total_amount: totalAmount,
-          payment_status: 'pending' 
-        }])
-        .select()
-        .single();
-
-      if (trxError) throw trxError;
-
-      // 2. Update status kursi & hubungkan ke transaction_id
-      // PENTING: filter status='available' agar kursi yang barusan diambil orang lain
-      // (race condition) tidak ikut ter-overwrite jadi 'sold'.
-      const { data: updatedSeats, error: seatError } = await supabase
-        .from('seats')
-        .update({
-          status: 'sold',
-          transaction_id: trx.id
-        })
-        .in('id', cart.map(s => s.id))
-        .eq('status', 'available')
-        .select();
-
-      if (seatError) throw seatError;
-
-      if (!updatedSeats || updatedSeats.length !== cart.length) {
-        // Sebagian kursi sudah diambil orang lain lebih dulu -> batalkan transaksi
-        await supabase.from('transactions').delete().eq('id', trx.id);
-        if (updatedSeats?.length) {
-          await supabase.from('seats')
-            .update({ status: 'available', transaction_id: null })
-            .in('id', updatedSeats.map(s => s.id));
-        }
-        await fetchData();
-        setCart([]);
-        setShowPayment(false);
-        alert("Yah, kehabisan! Salah satu kursi yang kamu pilih baru saja diambil orang lain. Silakan pilih kursi lain.");
-        return;
-      }
-
-      // 3. Simulasi Webhook: Otomatis 'paid' setelah 3 detik
-      setTimeout(async () => {
-        await supabase.from('transactions').update({ payment_status: 'paid' }).eq('id', trx.id);
-        console.log("Payment Verified Automatically");
+      // Simulasi Webhook: Otomatis 'paid' setelah 3 detik
+      const transactionId = data.data.id;
+      setTimeout(() => {
+        api.post(`/transactions/${transactionId}/simulate-payment`).catch(() => {});
       }, 3000);
 
       alert("Pemesanan Berhasil! Menunggu verifikasi pembayaran...");
       setCart([]);
       setShowPayment(false);
       navigate('/my-tickets'); // Langsung ke halaman tiket saya
-      
+
     } catch (err) {
-      alert("Gagal memproses: " + err.message);
+      if (err.response?.status === 409) {
+        // Salah satu kursi baru saja diambil orang lain
+        await fetchData();
+        setCart([]);
+        setShowPayment(false);
+        alert(err.response.data.message || "Yah, kehabisan! Salah satu kursi yang kamu pilih baru saja diambil orang lain.");
+      } else {
+        alert("Gagal memproses: " + (err.response?.data?.message || err.message));
+      }
     } finally {
       setLoading(false);
     }
@@ -139,24 +99,31 @@ export default function BookingPage() {
 
   const renderSection = (section) => {
     const seats = [...section.seats].sort((a, b) => a.id - b.id);
-    const configKey = Object.keys(STAND_CONFIG).find(k => section.name.includes(k));
-    const layout = STAND_CONFIG[configKey] || { start: -45, end: 45, inner: 200, outer: 260, color: "bg-slate-600" };
+    // Geometri sekarang data dari admin (lihat ManageSections), bukan lagi
+    // hardcode per-nama-section di frontend — section apa pun bisa diposisikan
+    // tanpa ubah kode.
+    const angleStart = section.angle_start ?? -45;
+    const angleEnd = section.angle_end ?? 45;
+    const radiusInner = section.radius_inner ?? 200;
+    const radiusOuter = section.radius_outer ?? 260;
+    const color = section.color || '#475569';
     // Hindari pembagian dengan 0 (NaN) saat section hanya punya 1 kolom kursi
-    const angleStep = (layout.end - layout.start) / (section.col_count > 1 ? section.col_count - 1 : 1);
+    const angleStep = (angleEnd - angleStart) / (section.col_count > 1 ? section.col_count - 1 : 1);
 
     return (
       <div className="absolute inset-0 pointer-events-none z-20">
         {seats.map((seat, i) => {
           const row = Math.floor(i / section.col_count);
           const col = i % section.col_count;
-          const angle = layout.start + col * angleStep;
+          const angle = angleStart + col * angleStep;
           const rad = (angle * Math.PI) / 180;
-          const radius = layout.inner + ((layout.outer - layout.inner) / (section.row_count > 1 ? section.row_count - 1 : 1)) * row;
+          const radius = radiusInner + ((radiusOuter - radiusInner) / (section.row_count > 1 ? section.row_count - 1 : 1)) * row;
           const x = Math.cos(rad) * radius;
           const y = Math.sin(rad) * radius;
           const isSelected = cart.find(s => s.id === seat.id);
           const isTaken = seat.status === 'sold' || seat.status === 'checked-in';
           const isHeld = seat.status === 'booked' || seat.status === 'blocked';
+          const isAvailable = !isTaken && !isHeld && !isSelected;
           const seatLabel = `${seat.row_label}${seat.seat_number}`;
           const statusLabel = isTaken ? 'Terjual' : isHeld ? 'Tidak tersedia' : isSelected ? 'Dipilih' : 'Tersedia';
 
@@ -169,8 +136,12 @@ export default function BookingPage() {
                 ${isTaken ? 'bg-slate-800 border-slate-900 opacity-25 grayscale cursor-not-allowed pointer-events-none' :
                   isHeld ? 'bg-rose-500 border-rose-700 text-rose-950 opacity-80 cursor-not-allowed pointer-events-none' :
                   isSelected ? 'bg-white border-slate-300 text-blue-600 scale-125 z-50 shadow-[0_0_15px_white] ring-2 ring-blue-400 cursor-pointer' :
-                  `${layout.color} text-white/80 cursor-pointer hover:scale-125 hover:z-50 hover:brightness-125`}`}
-              style={{ left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`, transform: `translate(-50%, -50%) rotate(${angle + 90}deg)` }}
+                  'text-white/80 cursor-pointer hover:scale-125 hover:z-50 hover:brightness-125'}`}
+              style={{
+                left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`,
+                transform: `translate(-50%, -50%) rotate(${angle + 90}deg)`,
+                ...(isAvailable ? { backgroundColor: color, borderBottomColor: darken(color) } : {}),
+              }}
             >
               {seatLabel}
             </div>
@@ -300,11 +271,12 @@ export default function BookingPage() {
       )}
 
       {showPayment && (
-        <PaymentModal 
-          total={cart.reduce((a,b)=>a+(Number(b.price)||0),0)} 
-          cart={cart} 
-          onClose={() => setShowPayment(false)} 
-          onConfirm={confirmBooking} 
+        <PaymentModal
+          total={cart.reduce((a,b)=>a+(Number(b.price)||0),0)}
+          cart={cart}
+          isGuest={!profile}
+          onClose={() => setShowPayment(false)}
+          onConfirm={confirmBooking}
         />
       )}
     </div>

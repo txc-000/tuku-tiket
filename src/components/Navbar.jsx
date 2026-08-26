@@ -1,38 +1,26 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { fetchCurrentUser, getStoredUser, logout } from '../lib/auth';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Ticket, LayoutDashboard, LogOut, User, 
-  ChevronDown, Settings, Bell 
+import {
+  Ticket, LayoutDashboard, LogOut, User,
+  ChevronDown, Settings, Bell
 } from 'lucide-react';
 
 export default function Navbar() {
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState(getStoredUser());
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchProfile = async (userId) => {
-      const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      setProfile(data);
-    };
+    fetchCurrentUser().then(setProfile);
 
-    // Ambil sesi awal
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) fetchProfile(session.user.id);
-    });
-
-    // Dengarkan perubahan status auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) fetchProfile(session.user.id);
-      else setProfile(null);
-    });
-
-    return () => subscription.unsubscribe();
+    const onAuthChanged = (e) => setProfile(e.detail);
+    window.addEventListener('auth:changed', onAuthChanged);
+    return () => window.removeEventListener('auth:changed', onAuthChanged);
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await logout();
     setIsDropdownOpen(false);
     navigate('/');
   };

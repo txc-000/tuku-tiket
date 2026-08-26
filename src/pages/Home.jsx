@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { 
-  Search, Calendar, MapPin, ArrowRight, 
+import api from '../lib/api';
+import {
+  Search, Calendar, MapPin, ArrowRight, Loader2,
   Music, Trophy, Mic2, Theater, Gamepad2, Star, Sparkles,
   Handshake, Zap, BarChart3, ShieldCheck // Ikon baru untuk Kerja Sama
 } from 'lucide-react';
@@ -34,18 +34,22 @@ export default function Home() {
 
   async function fetchEvents() {
     setLoading(true);
-    const { data } = await supabase.from('events').select('*').order('date', { ascending: true });
-    
-    if (data) {
-      const fixedData = data.map(event => {
+    try {
+      // The API only ever returns published events now — no more filtering
+      // needed (or missing) here like the old unfiltered Supabase query.
+      const { data } = await api.get('/events');
+      const fixedData = data.data.map(event => {
         const rawCat = event.category ? event.category.toLowerCase().trim() : '';
         let finalCategory = event.category || 'Lainnya';
         if (rawCat === 'sport' || rawCat === 'sports' || rawCat === 'olahraga') finalCategory = 'Olahraga';
         return { ...event, category: finalCategory };
       });
       setEvents(fixedData);
+    } catch (err) {
+      console.error('Gagal memuat event:', err.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const filteredEvents = events.filter(ev => {
@@ -108,6 +112,9 @@ export default function Home() {
           <h2 className="text-5xl font-black italic uppercase tracking-tighter">Sedang Trending</h2>
         </div>
         
+        {loading ? (
+          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-cyan-500" size={40} /></div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-14">
           {filteredEvents.map((event) => (
             <div 
@@ -151,6 +158,7 @@ export default function Home() {
             </div>
           ))}
         </div>
+        )}
       </div>
 
       {/* --- KERJA SAMA (PARTNERSHIP SECTION) --- */}

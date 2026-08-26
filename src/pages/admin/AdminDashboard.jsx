@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import api from '../../lib/api';
+import echo from '../../lib/echo';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, MapPin, Loader2, Layers, Pencil, DollarSign, 
@@ -31,65 +32,71 @@ export default function AdminDashboard() {
 
   // Forms
   const [eventForm, setEventForm] = useState({ title: '', date: '', venue: '', price: '', category: 'Konser', status: 'draft', image: '' });
-  const [secForm, setSecForm] = useState({ name: '', floor_name: '', price: '', row_count: 8, col_count: 12 });
+  const [secForm, setSecForm] = useState({
+    name: '', floor_name: '', price: '', row_count: 8, col_count: 12,
+    // Geometri peta kursi — dulu section baru numpuk di posisi yang sama karena
+    // hardcode di frontend, sekarang ini beneran dikirim ke backend sebagai data.
+    angle_start: -45, angle_end: 45, radius_inner: 220, radius_outer: 280, color: '#2563eb',
+  });
 
-  useEffect(() => { 
+  useEffect(() => {
     fetchEvents();
-    fetchTransactions(); 
-    
-    // Realtime Subscription
-    const channel = supabase.channel('admin-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => fetchTransactions())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'seats' }, () => fetchTransactions())
-      .subscribe();
-      
-    return () => supabase.removeChannel(channel);
+    fetchTransactions();
+
+    // Realtime: kursi & transaksi berubah di mana pun -> refresh statistik
+    echo.private('admin.dashboard')
+      .listen('.seat.updated', () => fetchTransactions())
+      .listen('.transaction.updated', () => fetchTransactions());
+
+    return () => echo.leave('admin.dashboard');
   }, []);
 
   useEffect(() => { if (selectedEventId) fetchSections(selectedEventId); }, [selectedEventId]);
 
   async function fetchEvents() {
-    const { data } = await supabase.from('events').select('*').order('created_at', { ascending: false });
+    const { data } = await api.get('/admin/events');
     if (data) {
-      setEvents(data);
-      setStats(prev => ({ ...prev, activeEvents: data.filter(e => e.status === 'published').length })); 
+      setEvents(data.data);
+      setStats(prev => ({ ...prev, activeEvents: data.data.filter(e => e.status === 'published').length }));
     }
   }
 
   async function fetchTransactions() {
-    const { data: trxData } = await supabase.from('transactions').select('*, events(title)').order('created_at', { ascending: false });
-    const { data: soldSeats } = await supabase.from('seats').select('id').in('status', ['sold', 'checked-in']);
-    
-    if (trxData) {
-      setTransactions(trxData);
-      setStats(prev => ({ 
-        ...prev, 
-        totalRevenue: trxData.reduce((acc, curr) => acc + Number(curr.total_amount), 0),
-        totalSold: soldSeats ? soldSeats.length : 0 
+    const { data } = await api.get('/admin/transactions');
+    if (data) {
+      setTransactions(data.data);
+      setStats(prev => ({
+        ...prev,
+        totalRevenue: data.stats.total_revenue,
+        totalSold: data.stats.total_sold,
       }));
     }
   }
 
   async function fetchSections(id) {
-    const { data } = await supabase.from('sections').select('*').eq('event_id', id).order('floor_name', { ascending: true });
-    if (data) setSections(data || []);
+    const { data } = await api.get(`/admin/events/${id}/sections`);
+    setSections(data.data || []);
   }
 
   const handleSubmitEvent = async (e) => {
     e.preventDefault();
     setLoading(true);
     const payload = { ...eventForm, price: parseFloat(eventForm.price) };
-    
-    if (isEditing) {
-      await supabase.from('events').update(payload).eq('id', editEventId);
-      setIsEditing(false);
-    } else {
-      await supabase.from('events').insert([payload]);
+
+    try {
+      if (isEditing) {
+        await api.put(`/admin/events/${editEventId}`, payload);
+        setIsEditing(false);
+      } else {
+        await api.post('/admin/events', payload);
+      }
+      setEventForm({ title: '', date: '', venue: '', price: '', category: 'Konser', status: 'draft', image: '' });
+      fetchEvents();
+    } catch (err) {
+      alert("Gagal menyimpan event: " + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
     }
-    
-    setEventForm({ title: '', date: '', venue: '', price: '', category: 'Konser', status: 'draft', image: '' });
-    fetchEvents();
-    setLoading(false);
   };
 
   const handleAddSection = async (e) => {
@@ -97,43 +104,23 @@ export default function AdminDashboard() {
     if (!selectedEventId) return alert("Pilih event di katalog terlebih dahulu!");
     setLoading(true);
 
-    // 1. Buat Section
-    const { data: sectionData, error } = await supabase.from('sections').insert([{ 
-        ...secForm, 
-        event_id: selectedEventId, 
-        price: parseFloat(secForm.price) 
-    }]).select();
-    
-    if (error) {
-        alert("Gagal membuat section");
-        setLoading(false);
-        return;
-    }
-    
-    // 2. Generate Kursi Otomatis
-    if (sectionData) {
-      const newSection = sectionData[0];
-      const seats = [];
-      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-      
-      for (let r = 0; r < newSection.row_count; r++) {
-        for (let c = 1; c <= newSection.col_count; c++) {
-          seats.push({ 
-              section_id: newSection.id, 
-              row_label: alphabet[r], 
-              seat_number: c, 
-              status: 'available' 
-          });
-        }
-      }
-      
-      const { error: seatError } = await supabase.from('seats').insert(seats);
-      if (seatError) alert("Gagal generate kursi, tapi section terbuat.");
+    try {
+      // Backend generate kursinya sekaligus (row label Excel-style A..Z, AA, AB..)
+      await api.post(`/admin/events/${selectedEventId}/sections`, {
+        ...secForm,
+        price: parseFloat(secForm.price),
+      });
 
       fetchSections(selectedEventId);
-      setSecForm({ name: '', floor_name: '', price: '', row_count: 8, col_count: 12 });
+      setSecForm({
+        name: '', floor_name: '', price: '', row_count: 8, col_count: 12,
+        angle_start: -45, angle_end: 45, radius_inner: 220, radius_outer: 280, color: '#2563eb',
+      });
+    } catch (err) {
+      alert("Gagal membuat section: " + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -281,7 +268,36 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <button 
+                  {/* Posisi di peta stadion — ini yang bikin section baru tidak
+                      numpuk di posisi yang sama seperti dulu. Sudut & radius
+                      dipakai bareng oleh halaman booking pelanggan & monitor ini. */}
+                  <div className="pt-2 border-t border-white/5">
+                    <p className="text-[8px] font-black uppercase mb-3 mt-3 text-slate-500 flex items-center gap-2"><MapPin size={10}/> Posisi di Peta</p>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                         <p className="text-[8px] font-black uppercase mb-1 text-slate-500">Sudut Mulai (°)</p>
+                         <input type="number" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs text-white text-center" value={secForm.angle_start} onChange={e => setSecForm({...secForm, angle_start: parseInt(e.target.value)})} />
+                      </div>
+                      <div>
+                         <p className="text-[8px] font-black uppercase mb-1 text-slate-500">Sudut Akhir (°)</p>
+                         <input type="number" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs text-white text-center" value={secForm.angle_end} onChange={e => setSecForm({...secForm, angle_end: parseInt(e.target.value)})} />
+                      </div>
+                      <div>
+                         <p className="text-[8px] font-black uppercase mb-1 text-slate-500">Radius Dalam</p>
+                         <input type="number" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs text-white text-center" value={secForm.radius_inner} onChange={e => setSecForm({...secForm, radius_inner: parseInt(e.target.value)})} />
+                      </div>
+                      <div>
+                         <p className="text-[8px] font-black uppercase mb-1 text-slate-500">Radius Luar</p>
+                         <input type="number" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs text-white text-center" value={secForm.radius_outer} onChange={e => setSecForm({...secForm, radius_outer: parseInt(e.target.value)})} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input type="color" className="h-10 w-14 rounded-lg cursor-pointer bg-transparent border border-white/10" value={secForm.color} onChange={e => setSecForm({...secForm, color: e.target.value})} />
+                      <p className="text-[8px] font-black uppercase text-slate-500">Warna Section</p>
+                    </div>
+                  </div>
+
+                  <button
                     type="submit" 
                     disabled={!selectedEventId || loading} 
                     className="w-full py-4 rounded-xl font-black uppercase text-[10px] tracking-widest bg-emerald-600 text-white hover:bg-emerald-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed mt-2"
@@ -353,15 +369,21 @@ export default function AdminDashboard() {
                               <p className="text-xs text-slate-500 font-mono">{t.customer_email}</p>
                            </td>
                            <td className="p-6">
-                              <span className="text-xs uppercase font-bold">{t.events?.title}</span>
+                              <span className="text-xs uppercase font-bold">{t.event?.title}</span>
                            </td>
                            <td className="p-6 font-mono text-emerald-400">
                               {formatIDR(t.total_amount)}
                            </td>
                            <td className="p-6 text-center">
-                              <span className="bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-[9px] font-black uppercase border border-emerald-500/20">
-                                Lunas
-                              </span>
+                              {t.payment_status === 'paid' ? (
+                                <span className="bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-[9px] font-black uppercase border border-emerald-500/20">
+                                  Lunas
+                                </span>
+                              ) : (
+                                <span className="bg-amber-500/10 text-amber-500 px-3 py-1 rounded-full text-[9px] font-black uppercase border border-amber-500/20">
+                                  Menunggu
+                                </span>
+                              )}
                            </td>
                            <td className="p-6 text-right text-xs text-slate-500">
                               {new Date(t.created_at).toLocaleDateString('id-ID')}

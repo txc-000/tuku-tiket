@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { supabase } from '../../lib/supabase';
-import { 
+import api from '../../lib/api';
+import {
   ArrowLeft, CheckCircle2, XCircle, Camera, 
   RefreshCcw, Info, User, Ticket 
 } from 'lucide-react';
@@ -33,47 +33,24 @@ export default function TicketScanner() {
   async function handleValidation(ticketId, scanner) {
     setLoading(true);
     try {
-      // 1. Cek validitas tiket di database
-      const { data: seat, error } = await supabase
-        .from('seats')
-        .select('*, sections(name, floor_name), transactions(customer_name, events(title))')
-        .eq('id', ticketId)
-        .single();
+      const { data: result } = await api.post('/admin/checkin', { seat_id: ticketId });
 
-      if (error || !seat) {
-        throw new Error("Tiket tidak ditemukan di database.");
-      }
-
-      // 2. Cek apakah tiket sudah pernah di-scan (Check-in ganda)
-      if (seat.status === 'checked-in') {
-        setScanResult({ 
-          success: false, 
-          msg: "Tiket ini sudah digunakan untuk check-in!",
-          data: seat 
-        });
-      } else if (seat.status === 'sold') {
-        // 3. Update status menjadi 'checked-in'
-        const { error: updateError } = await supabase
-          .from('seats')
-          .update({ status: 'checked-in' })
-          .eq('id', ticketId);
-
-        if (updateError) throw updateError;
-
-        setScanResult({ 
-          success: true, 
-          msg: "Check-in Berhasil! Silakan masuk.",
-          data: seat 
-        });
-      } else {
-        throw new Error("Status tiket tidak valid (Belum lunas).");
-      }
+      setScanResult({
+        success: true,
+        msg: result.message,
+        data: {
+          row_label: result.seat.row_label,
+          seat_number: result.seat.seat_number,
+          sections: result.section,
+          transactions: { customer_name: result.customer_name },
+        },
+      });
 
       // Hentikan scanner jika hasil sudah keluar agar tidak scan berkali-kali
       scanner.clear();
 
     } catch (err) {
-      setScanResult({ success: false, msg: err.message, data: null });
+      setScanResult({ success: false, msg: err.response?.data?.message || err.message, data: null });
       scanner.clear();
     } finally {
       setLoading(false);

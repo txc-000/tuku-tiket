@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import api from '../lib/api';
+import { fetchCurrentUser } from '../lib/auth';
 import { QRCodeCanvas } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -33,7 +34,7 @@ export default function MyTickets() {
 
   async function checkAuthAndFetch() {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await fetchCurrentUser();
     setAuthChecked(true);
 
     if (!user?.email) {
@@ -44,28 +45,14 @@ export default function MyTickets() {
     }
 
     setUserEmail(user.email);
-    await fetchMyTickets(user.email);
+    await fetchMyTickets();
   }
 
-  async function fetchMyTickets(email) {
+  async function fetchMyTickets() {
     setLoading(true);
     try {
-      // Mengambil data tiket + warna tema (theme_color) dari event
-      const { data, error } = await supabase
-        .from('seats')
-        .select(`
-          id, row_label, seat_number,
-          sections (name, floor_name, price),
-          transactions!inner (
-            customer_email,
-            events (title, date, venue, image, theme_color)
-          )
-        `)
-        .eq('transactions.customer_email', email)
-        .order('id', { ascending: false });
-
-      if (error) throw error;
-      setMyTickets(data || []);
+      const { data } = await api.get('/my-tickets');
+      setMyTickets(data.data || []);
     } catch (err) {
       console.error("Error fetching tickets:", err.message);
     } finally {

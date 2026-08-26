@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
-import { supabase } from '../../lib/supabase';
-import { 
+import api from '../../lib/api';
+import echo from '../../lib/echo';
+import {
   X, CheckCircle, XCircle, Loader2, DollarSign, User, Mail, 
   Lock, Trash2, ZoomIn, ZoomOut, RefreshCcw, Hand 
 } from 'lucide-react';
@@ -25,31 +26,6 @@ export default function SeatMonitor({ section }) {
   // FORCE UPDATE: Untuk trigger render ulang jika perlu (jarang dipakai di mode licin)
   const [, forceUpdate] = useState({});
 
-  useEffect(() => {
-    if (!section?.id) return;
-    
-    // Reset posisi saat ganti section
-    transform.current = { x: 0, y: 0, k: 1 };
-    updateTransform(); // Update posisi visual langsung
-
-    const fetchSeats = async () => {
-      setLoading(true);
-      const { data } = await supabase.from('seats').select('*').eq('section_id', section.id)
-        .order('row_label', { ascending: true }).order('seat_number', { ascending: true });
-      if (data) setSeats(data);
-      setLoading(false);
-    };
-    fetchSeats();
-
-    const sub = supabase.channel(`monitor-${section.id}`).on('postgres_changes', 
-      { event: 'UPDATE', schema: 'public', table: 'seats', filter: `section_id=eq.${section.id}` }, 
-      (p) => {
-        setSeats(prev => prev.map(s => s.id === p.new.id ? p.new : s));
-      }
-    ).subscribe();
-    return () => supabase.removeChannel(sub);
-  }, [section]);
-
   // --- FUNGSI UPDATE VISUAL LANGSUNG (TANPA RE-RENDER REACT) ---
   const updateTransform = () => {
     if (contentRef.current) {
@@ -57,6 +33,29 @@ export default function SeatMonitor({ section }) {
       contentRef.current.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
     }
   };
+
+  useEffect(() => {
+    if (!section?.id) return;
+
+    // Reset posisi saat ganti section
+    transform.current = { x: 0, y: 0, k: 1 };
+    updateTransform(); // Update posisi visual langsung
+
+    const fetchSeats = async () => {
+      setLoading(true);
+      const { data } = await api.get(`/admin/sections/${section.id}/seats`);
+      setSeats(data.data || []);
+      setLoading(false);
+    };
+    fetchSeats();
+
+    // Sudah di-scope ke section ini lewat nama channel-nya, seperti sebelumnya
+    echo.channel(`section.${section.id}.seats`).listen('.seat.updated', (seat) => {
+      setSeats(prev => prev.map(s => (s.id === seat.id ? { ...s, ...seat } : s)));
+    });
+
+    return () => echo.leave(`section.${section.id}.seats`);
+  }, [section]);
 
   // --- LOGIKA DRAG / GESER (PANNING) ---
   const handleMouseDown = (e) => {
@@ -105,8 +104,8 @@ export default function SeatMonitor({ section }) {
 
   const handleToggleBlock = async () => {
     if (!selectedSeat) return;
-    const newStatus = selectedSeat.status === 'blocked' ? 'available' : 'blocked';
-    await supabase.from('seats').update({ status: newStatus }).eq('id', selectedSeat.id);
+    const { data } = await api.patch(`/admin/seats/${selectedSeat.id}/toggle-block`);
+    const newStatus = data.data.status;
     setSelectedSeat(prev => ({ ...prev, status: newStatus }));
     // Update local state biar warna berubah instan
     setSeats(prev => prev.map(s => s.id === selectedSeat.id ? { ...s, status: newStatus } : s));
@@ -115,7 +114,7 @@ export default function SeatMonitor({ section }) {
   const handleDeleteSeat = async () => {
     if (!selectedSeat) return;
     if (confirm(`Hapus kursi ${selectedSeat.row_label}${selectedSeat.seat_number}?`)) {
-      await supabase.from('seats').delete().eq('id', selectedSeat.id);
+      await api.delete(`/admin/seats/${selectedSeat.id}`);
       setSeats(prev => prev.filter(s => s.id !== selectedSeat.id));
       setSelectedSeat(null);
     }
